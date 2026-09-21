@@ -1,0 +1,98 @@
+{
+ "allocator_settings": {
+  "PYTORCH_CUDA_ALLOC_CONF": "",
+  "expandable_segments": false,
+  "max_split_size": -1
+ },
+ "device_traces": [
+  [
+   {
+    "action": "segment_alloc",
+    "addr": 138772641480704,
+    "compile_context": "N/A",
+    "frames": [],
+    "size": 33554432,
+    "stream": 0,
+    "time_us": 1789995997101492
+   },
+   {
+    "action": "alloc",
+    "addr": 138772641480704,
+    "compile_context": "N/A",
+    "frames": [
+     {
+      "filename": "/app/model.py",
+      "line": 42,
+      "name": "forward"
+     }
+    ],
+    "size": 2097152,
+    "stream": 0,
+    "time_us": 1789995997101592
+   },
+   {
+    "action": "free_completed",
+    "addr": 138772641480704,
+    "compile_context": "N/A",
+    "frames": [],
+    "size": 2097152,
+    "stream": 0,
+    "time_us": 1789995997101692
+   },
+   {
+    "action": "oom",
+    "device_free": 12345678,
+    "frames": [],
+    "size": 1073741824,
+    "stream": 0,
+    "time_us": 1789995997101792
+   }
+  ]
+ ],
+ "external_annotations": [],
+ "segments": [
+  {
+   "active_size": 2097152,
+   "address": 138772641480704,
+   "allocated_size": 2097152,
+   "blocks": [
+    {
+     "address": 138772641480704,
+     "frames": [
+      {
+       "filename": "/app/model.py",
+       "line": 42,
+       "name": "forward"
+      },
+      {
+       "filename": "/app/train.py",
+       "line": 7,
+       "name": "<module>"
+      }
+     ],
+     "requested_size": 2000000,
+     "size": 2097152,
+     "state": "active_allocated"
+    },
+    {
+     "address": 138772643577856,
+     "frames": [],
+     "requested_size": 0,
+     "size": 31457280,
+     "state": "inactive"
+    }
+   ],
+   "device": 0,
+   "frames": [],
+   "is_expandable": false,
+   "requested_size": 2000000,
+   "segment_pool_id": [
+    0,
+    0
+   ],
+   "segment_type": "large",
+   "stream": 0,
+   "total_size": 33554432
+  }
+ ]
+}
