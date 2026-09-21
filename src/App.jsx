@@ -98,7 +98,6 @@ export default function App() {
       )}
 
       <footer>
-        <span>Everything runs in this tab — the snapshot is never uploaded anywhere.</span>
         <span className="spacer" style={{ flex: 1 }} />
         <a href="https://github.com/kapilsh/oomscope">source</a>
         <a href="https://www.kapilsharma.dev/">kapilsharma.dev</a>
