@@ -38,3 +38,4 @@ next-env.d.ts
 # vite build output (rebuilt in CI for GitHub Pages)
 /docs
 /dist
+

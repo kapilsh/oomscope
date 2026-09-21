@@ -40,9 +40,17 @@ jobs:
       # These compare against fixtures Python itself wrote.
       - name: Test the snapshot reader
         run: npm test
-      # Building only proves the modules parse. This renders every view against
-      # a real snapshot, so a crash lands here and not on the deployed page.
-      - name: Render every view against the demo snapshot
+      # The landing page quotes each sample's headline numbers. They are measured
+      # off the files rather than typed, so this catches a regenerated sample
+      # whose manifest was not refreshed with it.
+      - name: Check the sample manifest matches the sample files
+        run: |
+          node scripts/make_samples_manifest.mjs
+          git diff --exit-code src/samples.stats.json
+      # Building only proves the modules parse. This renders the landing page and
+      # every view against every shipped sample, so a crash lands here and not on
+      # the deployed page.
+      - name: Render every view against every sample
         run: npm run smoke
       - name: Build
         run: npm run build

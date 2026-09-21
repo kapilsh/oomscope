@@ -233,3 +233,34 @@ footer {
   .brand { font-size: 22px; }
   .tile .v { font-size: 18px; }
 }
+
+/* ---- sample picker --------------------------------------------------- */
+
+.or {
+  text-align: center; color: var(--text-faint); font-size: 12.5px;
+  text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 14px;
+}
+.samples section { margin-bottom: 22px; }
+.samples section h3 {
+  margin: 0 0 10px; font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--text-faint); font-weight: 650;
+}
+.sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.sample {
+  text-align: left; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 11px; padding: 13px 15px; color: var(--text);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.sample:hover:not(:disabled) {
+  background: var(--bg-card-hover); border-color: var(--nv-green-dim); transform: translateY(-1px);
+}
+.sample:disabled { opacity: .55; cursor: default; }
+.sample .t { font-weight: 650; font-size: 14.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sample .t .tag {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+  border: 1px solid var(--border-strong); color: var(--text-faint);
+  border-radius: 4px; padding: 1px 6px;
+}
+.sample .b { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
+.sample .m { font-size: 11.5px; color: var(--text-faint); margin-top: auto; padding-top: 4px; }

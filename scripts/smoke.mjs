@@ -5,12 +5,13 @@
 // map over an empty array, a divide by a zero-size segment) that otherwise
 // shows up as a blank page after deploy.
 //
-//     node scripts/smoke.mjs
+//     node scripts/smoke.mjs                  # public/demo.pickle
+//     node scripts/smoke.mjs snapshots/*.pickle
 //
 // It renders to a string, so there is no DOM and no browser: enough to catch a
 // crash, not a substitute for looking at the thing.
 
-import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { build } from 'esbuild'
 
@@ -30,6 +31,11 @@ import Overview from '${SRC}/components/Overview.jsx'
 import Segments from '${SRC}/components/Segments.jsx'
 import Allocations from '${SRC}/components/Allocations.jsx'
 import Timeline from '${SRC}/components/Timeline.jsx'
+import SamplePicker from '${SRC}/components/SamplePicker.jsx'
+
+export function renderPicker() {
+  return renderToStaticMarkup(h(SamplePicker, {})).length
+}
 
 export function run(bytes) {
   const model = parseSnapshot(unpickle(bytes))
@@ -67,28 +73,66 @@ try {
     external: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/server'],
   })
 
-  const { run } = await import(`file://${outPath}?t=${Date.now()}`)
-  const { out, model } = run(readFileSync(join(ROOT, 'public', 'demo.pickle')))
+  const { run, renderPicker } = await import(`file://${outPath}?t=${Date.now()}`)
 
-  const d = model.devices[0]
-  console.log(
-    `snapshot: ${d.segments.length} segments, ${d.timeline.points.length} trace events, ` +
-    `${d.timeline.oomEvents.length} OOM, ${d.blame.length} blame groups`,
-  )
-
-  let bad = 0
-  for (const [name, len] of Object.entries(out)) {
-    // A view that renders a few hundred bytes rendered its empty state, which
-    // against this snapshot means something silently produced nothing.
-    const ok = len > 500
-    if (!ok) { bad++ }
-    console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name.padEnd(12)} ${len.toLocaleString()} bytes of markup`)
-  }
-  if (bad > 0) {
-    console.error(`\n${bad} view(s) rendered suspiciously little`)
+  // The sample picker is the landing page, so a broken manifest is a blank
+  // first impression. Check it before anything else.
+  const pickerLen = renderPicker()
+  if (pickerLen < 1000) {
+    console.error(`sample picker rendered only ${pickerLen} bytes -- manifest broken?`)
     process.exitCode = 1
   } else {
-    console.log('\nall views rendered')
+    console.log(`ok  sample picker  ${pickerLen.toLocaleString()} bytes of markup\n`)
+  }
+
+  const targets = process.argv.slice(2)
+  const files = targets.length
+    ? targets
+    : readdirSync(join(ROOT, 'public', 'samples'))
+      .filter((f) => f.endsWith('.pickle')).sort()
+      .map((f) => join(ROOT, 'public', 'samples', f))
+
+  let failures = 0
+  for (const file of files) {
+    const label = file.split('/').pop()
+    let out, model
+    try {
+      ({ out, model } = run(readFileSync(file)))
+    } catch (err) {
+      failures++
+      console.log(`${label}\n  THREW: ${err.message}\n`)
+      continue
+    }
+    const d = model.devices[0]
+    // What counts as "rendered enough" depends on what the snapshot actually
+    // contains. A view that correctly draws its empty state is not a failure:
+    // a trace-less snapshot SHOULD give a short timeline telling you how to
+    // record one. So the floor is per view, and only drops where the data
+    // genuinely is not there.
+    const hasSegments = !!d && d.segments.length > 0
+    const floors = {
+      overview: 500, // always has tiles and a diagnosis, even at zero bytes
+      segments: hasSegments ? 500 : 1,
+      allocations: d && d.blame.length > 0 ? 500 : 1,
+      timeline: d && d.timeline.hasTrace ? 500 : 1,
+    }
+    const marks = Object.entries(out).map(([name, len]) => {
+      const ok = len >= floors[name]
+      if (!ok) { failures++ }
+      return `${ok ? '' : '!'}${name} ${len.toLocaleString()}`
+    })
+    console.log(
+      `ok  ${label.padEnd(34)} ${String(d ? d.segments.length : 0).padStart(3)} seg  ` +
+      `${String(d ? d.timeline.points.length : 0).padStart(5)} ev  ` +
+      `${marks.join('  ')}`,
+    )
+  }
+
+  if (failures > 0) {
+    console.error(`\n${failures} view(s) rendered suspiciously little or threw`)
+    process.exitCode = 1
+  } else {
+    console.log(`\nall views rendered for ${files.length} snapshot(s)`)
   }
 } finally {
   rmSync(WORK, { recursive: true, force: true })

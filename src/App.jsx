@@ -6,6 +6,7 @@ import Overview from './components/Overview.jsx'
 import Segments from './components/Segments.jsx'
 import Allocations from './components/Allocations.jsx'
 import Timeline from './components/Timeline.jsx'
+import SamplePicker from './components/SamplePicker.jsx'
 
 export default function App() {
   const { model, fileName, fileBytes, parseMs, error, loading, tab } = useStore()
@@ -121,39 +122,18 @@ function DevicePicker({ model }) {
 }
 
 function DropZone({ over, onPick }) {
-  const load = useStore((s) => s.load)
-  const [busy, setBusy] = useState(false)
-
-  const loadDemo = async () => {
-    setBusy(true)
-    try {
-      const res = await fetch(`${import.meta.env.BASE_URL}demo.pickle`)
-      if (!res.ok) { throw new Error(`demo snapshot returned ${res.status}`) }
-      const buffer = await res.arrayBuffer()
-      await load({ name: 'demo.pickle', buffer })
-    } catch (err) {
-      useStore.setState({ error: `Could not load the demo snapshot: ${err.message}` })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
-    <div className={`drop ${over ? 'over' : ''}`}>
-      <h2>Drop a memory snapshot</h2>
-      <p>
-        The <code>.pickle</code> written by <code>torch.cuda.memory._dump_snapshot()</code>.
-        It is read in your browser — nothing is uploaded, and nothing in it is executed.
-      </p>
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+    <>
+      <div className={`drop ${over ? 'over' : ''}`}>
+        <h2>Drop a memory snapshot</h2>
+        <p>
+          The <code>.pickle</code> written by <code>torch.cuda.memory._dump_snapshot()</code>.
+          It is read in your browser — nothing is uploaded, and nothing in it is executed.
+        </p>
         <button className="btn primary" onClick={onPick}>Choose a file</button>
-        <button className="btn" onClick={loadDemo} disabled={busy}>
-          {busy ? 'Loading…' : 'Try a demo snapshot'}
-        </button>
-      </div>
-      <div className="how">
-        <h3>Recording one</h3>
-        <pre>
+        <div className="how">
+          <h3>Recording one</h3>
+          <pre>
 <span className="c"># before the part you want to see</span>{'\n'}
 torch.cuda.memory.<span className="k">_record_memory_history</span>(max_entries=100_000){'\n'}
 {'\n'}
@@ -161,8 +141,12 @@ torch.cuda.memory.<span className="k">_record_memory_history</span>(max_entries=
 {'\n'}
 torch.cuda.memory.<span className="k">_dump_snapshot</span>(<span className="k">"snap.pickle"</span>){'\n'}
 torch.cuda.memory.<span className="k">_record_memory_history</span>(enabled=None)
-        </pre>
+          </pre>
+        </div>
       </div>
-    </div>
+
+      <div className="or">or open one of these — real captures, from a real GPU</div>
+      <SamplePicker />
+    </>
   )
 }
