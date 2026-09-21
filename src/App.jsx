@@ -145,7 +145,7 @@ torch.cuda.memory.<span className="k">_record_memory_history</span>(enabled=None
         </div>
       </div>
 
-      <div className="or">Open one of these example traces to get started</div>
+      <div className="or">Or, Open one of these example traces to get started</div>
       <SamplePicker />
     </>
   )
