@@ -237,8 +237,8 @@ footer {
 /* ---- sample picker --------------------------------------------------- */
 
 .or {
-  text-align: center; color: var(--text-faint); font-size: 12.5px;
-  text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 14px;
+  text-align: center; color: var(--text-dim); font-size: 15px;
+  margin: 28px 0 16px;
 }
 .samples section { margin-bottom: 22px; }
 .samples section h3 {
