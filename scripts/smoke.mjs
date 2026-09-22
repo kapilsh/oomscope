@@ -32,9 +32,17 @@ import Segments from '${SRC}/components/Segments.jsx'
 import Allocations from '${SRC}/components/Allocations.jsx'
 import Timeline from '${SRC}/components/Timeline.jsx'
 import SamplePicker from '${SRC}/components/SamplePicker.jsx'
+import App from '${SRC}/App.jsx'
 
 export function renderPicker() {
   return renderToStaticMarkup(h(SamplePicker, {})).length
+}
+
+// The shell: header and wordmark glyph, drop zone, footer. Effects do not run
+// in a static render, which is fine -- this is here to catch a component that
+// throws on first paint, like a malformed inline SVG.
+export function renderApp() {
+  return renderToStaticMarkup(h(App, {})).length
 }
 
 export function run(bytes) {
@@ -73,7 +81,15 @@ try {
     external: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/server'],
   })
 
-  const { run, renderPicker } = await import(`file://${outPath}?t=${Date.now()}`)
+  const { run, renderPicker, renderApp } = await import(`file://${outPath}?t=${Date.now()}`)
+
+  const appLen = renderApp()
+  if (appLen < 1000) {
+    console.error(`app shell rendered only ${appLen} bytes`)
+    process.exitCode = 1
+  } else {
+    console.log(`ok  app shell      ${appLen.toLocaleString()} bytes of markup`)
+  }
 
   // The sample picker is the landing page, so a broken manifest is a blank
   // first impression. Check it before anything else.

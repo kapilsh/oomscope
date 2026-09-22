@@ -48,7 +48,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="top">
-        <div className="brand">oom<span>scope</span></div>
+        <div className="brand">
+          <Mark />
+          oom<span>scope</span>
+        </div>
         <div className="tagline">see what your PyTorch memory snapshot is actually holding</div>
         <div className="spacer" />
         {model && (
@@ -103,6 +106,32 @@ export default function App() {
         <a href="https://www.kapilsharma.dev/">kapilsharma.dev</a>
       </footer>
     </div>
+  )
+}
+
+/**
+ * The wordmark's glyph: three segment rows, part live and part stranded -- the
+ * segment map at 20px. Drawn inline rather than loaded from public/favicon.svg
+ * so it scales with the type around it; the two are the same artwork, so a
+ * change to one belongs in the other.
+ */
+function Mark() {
+  return (
+    <svg className="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <g fill="var(--blk-free)">
+        <rect x="6" y="7" width="20" height="4.5" rx="1.6" />
+        <rect x="6" y="13.75" width="20" height="4.5" rx="1.6" />
+        <rect x="6" y="20.5" width="20" height="4.5" rx="1.6" />
+      </g>
+      <g fill="var(--nv-green)">
+        <rect x="6" y="7" width="13.5" height="4.5" rx="1.6" />
+        <rect x="21" y="7" width="5" height="4.5" rx="1.6" />
+        <rect x="6" y="13.75" width="4.5" height="4.5" rx="1.6" />
+        <rect x="12.5" y="13.75" width="3" height="4.5" rx="1.5" />
+        <rect x="17.5" y="13.75" width="2.5" height="4.5" rx="1.25" />
+        <rect x="6" y="20.5" width="9.5" height="4.5" rx="1.6" />
+      </g>
+    </svg>
   )
 }
 

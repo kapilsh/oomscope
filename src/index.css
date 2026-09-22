@@ -57,7 +57,11 @@ button { cursor: pointer; }
   display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
   padding: 28px 0 18px;
 }
-.brand { font-size: 26px; font-weight: 750; letter-spacing: -.5px; }
+.brand {
+  font-size: 26px; font-weight: 750; letter-spacing: -.5px;
+  display: flex; align-items: center; gap: 10px;
+}
+.brand .mark { width: 1.1em; height: 1.1em; flex: none; }
 .brand span { color: var(--nv-green); }
 .tagline { color: var(--text-dim); }
 .top .spacer { flex: 1 1 auto; }
