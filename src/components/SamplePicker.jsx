@@ -51,7 +51,7 @@ export default function SamplePicker() {
                 >
                   <div className="t">
                     {s.title}
-                    {s.synthetic && <span className="tag">synthetic</span>}
+                    {s.synthetic && <span className="tag">{s.synthetic === true ? 'synthetic' : s.synthetic}</span>}
                     {busy === s.file && <span className="tag">loading…</span>}
                   </div>
                   <div className="b">{s.blurb}</div>
@@ -76,6 +76,7 @@ function facts(s) {
     out.push('nothing allocated')
   }
   if (s.devices > 1) { out.push(`${s.devices} devices`) }
+  if (s.pools > 1) { out.push(`${s.pools} pools`) }
   if (s.oomEvents > 0) { out.push(`${s.oomEvents} OOM`) }
   if (!s.hasTrace) {
     out.push('no trace')

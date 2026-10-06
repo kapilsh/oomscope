@@ -217,6 +217,158 @@ def expandable_segments():
     return locals()
 
 
+def _warmup(fn, *args):
+    # Graph capture must not be the first time a kernel runs: cuBLAS handles,
+    # workspaces and lazy init all allocate, and none of that may happen inside
+    # a capture. Warm up on a side stream, as the docs prescribe.
+    import torch
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s):
+        for _ in range(3):
+            fn(*args)
+    torch.cuda.current_stream().wait_stream(s)
+
+
+@scenario("12-cuda-graphs.pickle",
+          "Manual CUDA graph capture: one shared pool across batch sizes, one graph on its own.")
+def cuda_graphs():
+    import torch
+    torch.cuda.memory._record_memory_history(max_entries=80_000)
+    model, d = _model()
+    model.eval()
+    seq = 256
+
+    # The vLLM pattern: capture one graph per batch size, largest first, all
+    # into one pool from graph_pool_handle(). Each smaller graph reuses the
+    # blocks the larger one left behind, so the pool is sized by the biggest.
+    shared = torch.cuda.graph_pool_handle()
+    graphs, static_in, static_out = {}, {}, {}
+    with torch.no_grad():
+        for bs in (16, 8, 4, 2, 1):
+            static_in[bs] = torch.randn(bs, seq, d, device="cuda")
+            _warmup(model, static_in[bs])
+            g = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(g, pool=shared):
+                static_out[bs] = model(static_in[bs])
+            graphs[bs] = g
+
+        # A second model captured without pool=: it gets a private pool of its
+        # own that nothing else can borrow from, sized by its own peak.
+        head, _ = _model(layers=2)
+        head.eval()
+        head_in = torch.randn(16, seq, d, device="cuda")
+        _warmup(head, head_in)
+        head_graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(head_graph):
+            head_out = head(head_in)
+
+        for _ in range(3):
+            for bs, g in graphs.items():
+                static_in[bs].normal_()
+                g.replay()
+            head_graph.replay()
+        torch.cuda.synchronize()
+    return locals()
+
+
+@scenario("13-cudagraph-trees.pickle",
+          "torch.compile(mode='reduce-overhead'): cudagraph trees own a shared private pool.")
+def cudagraph_trees():
+    import torch
+    torch.cuda.memory._record_memory_history(max_entries=80_000)
+    model, d = _model()
+    opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+    compiled = torch.compile(model, mode="reduce-overhead")
+    for _ in range(4):
+        x = torch.randn(8, 256, d, device="cuda")
+        loss = compiled(x).square().mean()
+        loss.backward()
+        opt.step()
+        opt.zero_grad(set_to_none=True)
+    torch.cuda.synchronize()
+    return locals()
+
+
+@scenario("14-mempool.pickle",
+          "torch.cuda.MemPool: a KV cache fenced off, and a scratch pool that kept its memory.")
+def mempool():
+    import torch
+    torch.cuda.memory._record_memory_history(max_entries=80_000)
+    model, d = _model()
+    model.eval()
+
+    # A KV cache carved out up front, in a pool of its own so the activations
+    # around it can never fragment the space it needs.
+    kv_pool = torch.cuda.MemPool()
+    with torch.cuda.use_mem_pool(kv_pool):
+        kv = [torch.empty(2, 16, 1024, d, dtype=torch.float16, device="cuda") for _ in range(4)]
+
+    # A scratch pool used for one burst of work and then let go of. Freeing the
+    # tensors returns the blocks to the pool, not to the default allocator, so
+    # the memory stays reserved and unusable by anything outside it.
+    scratch_pool = torch.cuda.MemPool()
+    with torch.cuda.use_mem_pool(scratch_pool):
+        scratch = [torch.empty(1024 * 1024 * (4 + i % 5), dtype=torch.uint8, device="cuda")
+                   for i in range(24)]
+    del scratch[1::2]
+
+    with torch.no_grad():
+        for _ in range(3):
+            model(torch.randn(8, 256, d, device="cuda"))
+    return locals()
+
+
+_STANDIN_ALLOCATOR = r"""
+#include <stddef.h>
+typedef struct CUstream_st* cudaStream_t;
+extern int cudaMalloc(void**, size_t);
+extern int cudaFree(void*);
+void* standin_alloc(size_t size, int device, cudaStream_t stream) {
+  void* p = 0; cudaMalloc(&p, size); return p;
+}
+void standin_free(void* p, size_t size, int device, cudaStream_t stream) { cudaFree(p); }
+"""
+
+
+@scenario("15-symmetric-pool-STANDIN.pickle",
+          "MemPool(symmetric=True) over a pluggable allocator, standing in for ncclMemAlloc.")
+def symmetric_pool_standin():
+    # The real thing is MemPool(pg.mem_allocator, symmetric=True), with NCCL's
+    # ncclMemAlloc behind it. torch 2.8 only hands out that allocator on a GPU
+    # with multicast support, and the card these were recorded on has none. So
+    # the allocator here is a two-line cudaMalloc wrapper loaded the same way
+    # NCCL's is -- through CUDAPluggableAllocator -- and everything above it
+    # (the pool, its id, its blocks, the snapshot) is the real code path.
+    #
+    # Note that torch.distributed._symmetric_memory.empty() would not have
+    # worked as a stand-in either: in 2.8 it maps memory itself, around the
+    # caching allocator, so its buffers never appear in a snapshot at all.
+    import subprocess
+    import tempfile
+    import torch
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    (tmp / "standin.c").write_text(_STANDIN_ALLOCATOR)
+    subprocess.run(["gcc", "-shared", "-fPIC", "-o", tmp / "standin.so", tmp / "standin.c"], check=True)
+    alloc = torch.cuda.memory.CUDAPluggableAllocator(str(tmp / "standin.so"), "standin_alloc", "standin_free")
+
+    torch.cuda.memory._record_memory_history(max_entries=80_000)
+    model, d = _model()
+    opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+    symm_pool = torch.cuda.MemPool(alloc.allocator(), symmetric=True)
+    with torch.cuda.use_mem_pool(symm_pool):
+        # Communication buffers: one per bucket of gradients, plus a workspace
+        # that is resized once -- the old one goes back to the pool, not the GPU.
+        buckets = [torch.empty(25 * 1024 * 1024 // 4, dtype=torch.float32, device="cuda") for _ in range(4)]
+        workspace = torch.empty(16 * 1024 * 1024, dtype=torch.uint8, device="cuda")
+        del workspace
+        workspace = torch.empty(48 * 1024 * 1024, dtype=torch.uint8, device="cuda")
+
+    _train(model, opt, d, steps=2)
+    return locals()
+
+
 # --------------------------------------------------------------------------
 # driver
 # --------------------------------------------------------------------------
@@ -238,7 +390,10 @@ def run_one(name):
     print(f"    {filename}  {size / 1024:.0f} KiB  "
           f"allocated {torch.cuda.memory_allocated() / 2**20:.1f} MiB  "
           f"reserved {torch.cuda.memory_reserved() / 2**20:.1f} MiB")
-    del state
+    # Handed back rather than dropped here: the caller exits without teardown,
+    # and freeing a locals() dict destroys its contents in no particular order
+    # -- a MemPool can go before the tensors that live in it, which segfaults.
+    return state
 
 
 def main():
@@ -248,8 +403,13 @@ def main():
     args = ap.parse_args()
 
     if args.child:
-        run_one(args.child)
-        return
+        state = run_one(args.child)  # noqa: F841 -- held until exit
+        # Skip interpreter teardown. The child exists only to write one file,
+        # and tearing down a scenario that owns MemPools can segfault on the
+        # way out -- after the snapshot is safely on disk, but failing the run
+        # all the same.
+        sys.stdout.flush()
+        os._exit(0)
 
     names = [args.only] if args.only else list(SCENARIOS)
     for name in names:

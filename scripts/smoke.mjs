@@ -45,9 +45,7 @@ export function renderApp() {
   return renderToStaticMarkup(h(App, {})).length
 }
 
-export function run(bytes) {
-  const model = parseSnapshot(unpickle(bytes))
-  const device = model.devices[0]
+function views(device, model) {
   const out = {}
   for (const [name, C, props] of [
     ['overview', Overview, { device, model }],
@@ -57,7 +55,16 @@ export function run(bytes) {
   ]) {
     out[name] = renderToStaticMarkup(h(C, props)).length
   }
-  return { out, model }
+  return out
+}
+
+export function run(bytes) {
+  const model = parseSnapshot(unpickle(bytes))
+  const device = model.devices[0]
+  // Each pool is rendered on its own as well: a pool is handed to the views in
+  // place of a device, so any field a pool forgot to carry shows up here.
+  const pools = (device?.pools ?? []).map((p) => ({ pool: p, out: views(p, model) }))
+  return { out: views(device, model), pools, model }
 }
 `
 
@@ -111,9 +118,9 @@ try {
   let failures = 0
   for (const file of files) {
     const label = file.split('/').pop()
-    let out, model
+    let out, pools, model
     try {
-      ({ out, model } = run(readFileSync(file)))
+      ({ out, pools, model } = run(readFileSync(file)))
     } catch (err) {
       failures++
       console.log(`${label}\n  THREW: ${err.message}\n`)
@@ -142,6 +149,16 @@ try {
       `${String(d ? d.timeline.points.length : 0).padStart(5)} ev  ` +
       `${marks.join('  ')}`,
     )
+    for (const { pool, out: pout } of pools) {
+      // The floor drops for a pool whose surviving segments saw no events.
+      const pfloors = { ...floors, timeline: pool.timeline.hasTrace ? 500 : 1, allocations: pool.blame.length ? 500 : 1 }
+      const pmarks = Object.entries(pout).map(([name, len]) => {
+        const ok = len >= pfloors[name]
+        if (!ok) { failures++ }
+        return `${ok ? '' : '!'}${name} ${len.toLocaleString()}`
+      })
+      console.log(`      pool (${pool.poolId.join(', ')}) ${pool.label.padEnd(27)}${pmarks.join('  ')}`)
+    }
   }
 
   if (failures > 0) {

@@ -64,6 +64,13 @@ for (const f of files) {
       const top = d.blame[0]
       console.log(`          top source: ${bytes(top.bytes)} over ${top.count} blocks -- ${top.label}`)
     }
+    for (const p of d.pools) {
+      console.log(
+        `          pool (${p.poolId.join(', ')}) ${p.label.padEnd(21)}` +
+        ` reserved ${bytes(p.stats.reserved).padStart(9)}  live ${bytes(p.stats.active).padStart(9)}` +
+        `  ${p.timeline.points.length} events -- ${p.evidence}`,
+      )
+    }
   }
 }
 

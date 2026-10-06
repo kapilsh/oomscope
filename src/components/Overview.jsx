@@ -15,6 +15,7 @@ export default function Overview({ device, model }) {
   const s = device.stats
   const tl = device.timeline
   const setTab = useStore((st) => st.setTab)
+  const setPool = useStore((st) => st.setPool)
 
   // Fragmentation only means anything once there is a meaningful amount of
   // free-but-reserved memory. 90% of 4 MiB is not a problem worth a red tile.
@@ -24,6 +25,8 @@ export default function Overview({ device, model }) {
 
   return (
     <>
+      {device.pool && <PoolScope pool={device.pool} onAll={() => setPool(null)} />}
+
       <div className="tiles">
         <Tile
           k="Reserved"
@@ -51,7 +54,9 @@ export default function Overview({ device, model }) {
         <Tile
           k="Fragmentation"
           v={pct(s.fragmentation)}
-          n={`largest free block is ${bytes(s.largestFreeBlock)}`}
+          n={device.pools.length > 0 && !device.pool
+            ? `largest free block is ${bytes(s.largestFreeBlock)}, across pools that cannot lend to each other`
+            : `largest free block is ${bytes(s.largestFreeBlock)}`}
           tone={fragTone}
         />
         <Tile
@@ -80,6 +85,8 @@ export default function Overview({ device, model }) {
       </div>
 
       <Diagnosis device={device} onTab={setTab} />
+
+      {device.pools.length > 0 && <Pools pools={device.pools} current={device.pool} onPick={setPool} />}
 
       {tl.hasTrace && (
         <div className="card">
@@ -126,6 +133,80 @@ export default function Overview({ device, model }) {
   )
 }
 
+/** Says, above the numbers, that the numbers are one pool's and not the card's. */
+function PoolScope({ pool, onAll }) {
+  return (
+    <div className={`scope k-${pool.kind}`}>
+      <i />
+      <div>
+        <b>{pool.label} <span className="mono">({pool.poolId.join(', ')})</span></b>
+        <span className="muted"> — every number below is this pool alone. </span>
+        <button className="linkish" onClick={onAll}>show the whole device</button>
+        <div className="muted small">{pool.origin} <span className="faint">Evidence: {pool.evidence}.</span></div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Reserved memory split by the pool that owns it. This is the table that
+ * explains a device whose free memory never seems to get used: free bytes in
+ * a private pool are free only to that pool's owner.
+ */
+function Pools({ pools, current, onPick }) {
+  const total = pools.reduce((n, p) => n + p.stats.reserved, 0)
+  return (
+    <div className="card">
+      <h3>Memory pools</h3>
+      <p className="sub">
+        Private pools are walled off. A free block inside one can only serve allocations made into
+        that same pool, and <code>torch.cuda.empty_cache()</code> will not release it while the
+        pool's owner — the graph, the <code>MemPool</code> — is still alive. Click a pool to look at
+        it alone.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Pool</th>
+            <th className="r">Reserved</th>
+            <th className="r">Live</th>
+            <th className="r">Free</th>
+            <th className="r">Largest free</th>
+            <th className="r">Segments</th>
+            <th style={{ width: '16%' }} />
+          </tr>
+        </thead>
+        <tbody>
+          {pools.map((p) => {
+            const st = p.stats
+            return (
+              <tr key={p.key} className={`click ${current === p ? 'sel' : ''}`} onClick={() => onPick(current === p ? null : p.key)}>
+                <td>
+                  <div className={`poolname k-${p.kind}`}>
+                    <i />{p.label} <span className="mono muted">({p.poolId.join(', ')})</span>
+                  </div>
+                  <div className="muted small" style={{ marginTop: 3, lineHeight: 1.5 }}>{p.origin}</div>
+                </td>
+                <td className="r num">{bytes(st.reserved)}</td>
+                <td className="r num">{bytes(st.active)}</td>
+                <td className="r num muted">{bytes(st.externalFree)}</td>
+                <td className="r num muted">{st.freeBlocks ? bytes(st.largestFreeBlock) : '—'}</td>
+                <td className="r num muted">{count(st.segmentCount)}</td>
+                <td>
+                  <div className="mix thin" title={`${pct(st.reserved / total)} of the device; ${pct(st.utilisation)} of it live`}>
+                    <div className="a" style={{ width: `${(st.active / total) * 100}%` }} />
+                    <div className="f" style={{ width: `${(st.externalFree / total) * 100}%` }} />
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function formatSetting(v) {
   if (v === true) { return 'true' }
   if (v === false) { return 'false' }
@@ -152,18 +233,33 @@ function Diagnosis({ device, onTab }) {
     })
   }
 
-  if (s.externalFree > 64 * 1024 * 1024 && s.fragmentation > 0.7) {
+  // Free memory only means something within one pool: a free block in a graph
+  // pool cannot serve an ordinary allocation. So from the whole device,
+  // fragmentation is judged on the default pool -- where ordinary allocations
+  // go -- and the private-pool finding further down speaks for the rest.
+  const defaultPool = !device.pool && device.pools.length > 0
+    ? device.pools.find((p) => p.kind === 'default') ?? null
+    : null
+  const fs = device.pool || device.pools.length === 0 ? s : defaultPool?.stats
+  const where = defaultPool ? ' in the default pool' : ''
+  const inPrivate = device.pool && device.pool.kind !== 'default'
+  const fragFix = inPrivate
+    ? 'Allocations made into this pool can only use its own free blocks, so the fix is in what goes into it, or in giving it more room.'
+    : 'Try expandable_segments:True, or a smaller max_split_size_mb.'
+
+  if (fs && fs.externalFree > 64 * 1024 * 1024 && fs.fragmentation > 0.7) {
     findings.push({
       tone: 'warn',
-      title: `${bytes(s.externalFree)} is reserved but free, and badly fragmented`,
-      body: `The largest single free block is only ${bytes(s.largestFreeBlock)}, so an allocation bigger than that fails even though ${bytes(s.externalFree)} is technically available. This is the classic "OOM with plenty of memory free". Try expandable_segments:True, or a smaller max_split_size_mb.`,
+      title: `${bytes(fs.externalFree)} is reserved but free${where}, and badly fragmented`,
+      body: `The largest single free block${where} is only ${bytes(fs.largestFreeBlock)}, so an allocation bigger than that fails even though ${bytes(fs.externalFree)} is technically available. This is the classic "OOM with plenty of memory free". ${fragFix}`,
       tab: 'segments',
     })
-  } else if (s.externalFree > s.active && s.externalFree > 64 * 1024 * 1024) {
+  } else if (fs && fs.externalFree > fs.active && fs.externalFree > 64 * 1024 * 1024) {
     findings.push({
       tone: 'warn',
-      title: `More memory is idle than in use`,
-      body: `${bytes(s.externalFree)} sits free inside reserved segments against ${bytes(s.active)} actually live. The largest free block is ${bytes(s.largestFreeBlock)}, so it is reusable — but torch.cuda.empty_cache() would hand it back if another process needs the card.`,
+      title: `More memory is idle than in use${where}`,
+      body: `${bytes(fs.externalFree)} sits free inside reserved segments${where} against ${bytes(fs.active)} actually live. The largest free block is ${bytes(fs.largestFreeBlock)}, so it is reusable` +
+        (inPrivate ? ' — by this pool alone.' : ' — but torch.cuda.empty_cache() would hand it back if another process needs the card.'),
       tab: 'segments',
     })
   }
@@ -187,6 +283,24 @@ function Diagnosis({ device, onTab }) {
         tab: 'segments',
       })
     }
+  }
+
+  // Only from the whole-device view: inside one pool, "private pools" is the
+  // pool you are already looking at.
+  const privatePools = device.pool ? [] : device.pools.filter((p) => p.kind !== 'default')
+  const privateFree = privatePools.reduce((n, p) => n + p.stats.externalFree, 0)
+  const privateReserved = privatePools.reduce((n, p) => n + p.stats.reserved, 0)
+  if (privatePools.length > 0 && privateFree > 64 * 1024 * 1024) {
+    const graphs = privatePools.filter((p) => p.kind === 'graph')
+    const ownPools = graphs.filter((p) => p.poolId[0] > 0 && p.poolId[1] === 0)
+    findings.push({
+      tone: privateFree > s.active ? 'warn' : '',
+      title: `${bytes(privateFree)} free inside private pools, where nothing else can use it`,
+      body: `${count(privatePools.length)} private pool${privatePools.length > 1 ? 's hold' : ' holds'} ${bytes(privateReserved)} of the ${bytes(s.reserved)} reserved. Their free blocks cannot serve ordinary allocations, and empty_cache() leaves them alone while the owner is alive.` +
+        (graphs.length > 0 ? ' For a CUDA graph that is the cost of replay: its intermediates live at fixed addresses, so the pool stays as big as the capture\'s peak.' : '') +
+        (ownPools.length > 0 && graphs.length > 1 ? ` ${count(ownPools.length)} of the graph pools ${ownPools.length > 1 ? 'each belong' : 'belongs'} to a single capture; capturing with pool=torch.cuda.graph_pool_handle() lets graphs that never run at once share one.` : ''),
+      tab: 'segments',
+    })
   }
 
   if (findings.length === 0) {

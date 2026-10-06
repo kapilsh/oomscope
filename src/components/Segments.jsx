@@ -11,6 +11,7 @@ const SORTS = {
   size: (a, b) => b.totalSize - a.totalSize,
   free: (a, b) => (b.totalSize - b.activeSize) - (a.totalSize - a.activeSize),
   fragments: (a, b) => b.blocks.filter((x) => !x.active).length - a.blocks.filter((x) => !x.active).length,
+  pool: (a, b) => a.poolKey.localeCompare(b.poolKey, 'en', { numeric: true }) || a.address - b.address,
 }
 
 /**
@@ -36,6 +37,13 @@ export default function Segments({ device }) {
   }, [device.segments, sort, onlyFragmented])
 
   const s = device.stats
+  // Tag each row with its pool only when there is more than one in view;
+  // inside a single pool the tag would repeat on every row.
+  const poolOf = useMemo(() => {
+    const m = new Map()
+    if (!device.pool) { for (const p of device.pools) { m.set(p.key, p) } }
+    return m
+  }, [device.pool, device.pools])
 
   return (
     <>
@@ -75,6 +83,7 @@ export default function Segments({ device }) {
               <option value="size">size</option>
               <option value="free">free bytes</option>
               <option value="fragments">fragment count</option>
+              {poolOf.size > 0 && <option value="pool">pool</option>}
             </select>
           </span>
         </div>
@@ -85,6 +94,7 @@ export default function Segments({ device }) {
           <Segment
             key={`${seg.address}`}
             seg={seg}
+            pool={poolOf.get(seg.poolKey)}
             selected={selected}
             onSelect={selectBlock}
           />
@@ -97,6 +107,7 @@ export default function Segments({ device }) {
           What the {count(s.freeBlocks)} free blocks look like. An allocation only succeeds if one
           block is big enough on its own — many small blocks and no large one is what fragmentation
           costs you.
+          {poolOf.size > 0 && ' This mixes every pool, and a block only serves its own pool — pick one above to see what it alone has free.'}
         </p>
         <FreeHistogram sizes={s.freeSizes} largest={s.largestFreeBlock} />
       </div>
@@ -104,7 +115,7 @@ export default function Segments({ device }) {
   )
 }
 
-function Segment({ seg, selected, onSelect }) {
+function Segment({ seg, pool, selected, onSelect }) {
   const free = seg.totalSize - seg.activeSize
   const fragments = seg.blocks.filter((b) => !b.active).length
   const isSel = (b) => selected && selected.segAddress === seg.address && selected.index === b.index
@@ -119,6 +130,11 @@ function Segment({ seg, selected, onSelect }) {
         <b style={{ color: 'var(--text)' }}>{bytes(seg.totalSize)}</b>
         <span className={`tag ${seg.type}`}>{seg.type}</span>
         {seg.isExpandable && <span className="tag exp">expandable</span>}
+        {pool && pool.kind !== 'default' && (
+          <span className={`tag k-${pool.kind}`} title={`${pool.origin}\n${pool.evidence}`}>
+            {pool.label} ({pool.poolId.join(', ')})
+          </span>
+        )}
         {seg.stream !== 0 && <span className="tag">stream {seg.stream}</span>}
         <span>{bytes(seg.activeSize)} live</span>
         <span>·</span>

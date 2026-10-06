@@ -6,7 +6,7 @@
 // off the actual files by scripts/make_samples_manifest.mjs, so a regenerated
 // sample cannot leave a stale figure behind on the landing page.
 //
-// They are fetched on click, never on page load, so having eleven of them costs
+// They are fetched on click, never on page load, so having fifteen of them costs
 // a visitor nothing until they ask for one.
 
 import stats from './samples.stats.json'
@@ -67,6 +67,35 @@ const SAMPLES = [
     look: 'segments',
   },
   {
+    file: '12-cuda-graphs.pickle',
+    title: 'CUDA graphs',
+    blurb: 'Five batch sizes captured into one shared pool, the way serving engines do it, beside a smaller model captured into a pool of its own. The overview splits reserved memory by pool: the lone graph costs about as much as all five that share.',
+    group: 'pools',
+    look: 'overview',
+  },
+  {
+    file: '13-cudagraph-trees.pickle',
+    title: 'torch.compile, reduce-overhead',
+    blurb: 'A training loop under cudagraph trees. Between replays the graph pool is the biggest thing on the card, and nothing in it is live — the graphs\' working set, kept at fixed addresses so replay can reuse it.',
+    group: 'pools',
+    look: 'overview',
+  },
+  {
+    file: '14-mempool.pickle',
+    title: 'torch.cuda.MemPool',
+    blurb: 'A KV cache fenced into a pool of its own, and a scratch pool used for one burst then half freed. The freed half stays reserved in the scratch pool, out of reach of the default pool next to it.',
+    group: 'pools',
+    look: 'segments',
+  },
+  {
+    file: '15-symmetric-pool-STANDIN.pickle',
+    title: 'Symmetric-memory pool',
+    blurb: 'MemPool(allocator, symmetric=True) holding gradient buckets and a resized workspace. The allocator behind it is a cudaMalloc stand-in for ncclMemAlloc, which needs multicast this GPU lacks; the pool, its blocks and the snapshot are the real code path.',
+    group: 'pools',
+    look: 'segments',
+    synthetic: 'stand-in allocator',
+  },
+  {
     file: '06-truncated-trace.pickle',
     title: 'Truncated trace',
     blurb: 'Recorded with max_entries far too small, so the ring buffer wrapped and the trace begins mid-run. The curve shape is real; the baseline is shifted and flagged rather than quietly clamped.',
@@ -104,5 +133,6 @@ export const samples = SAMPLES
 
 export const groups = [
   { id: 'typical', label: 'What a problem looks like' },
+  { id: 'pools', label: 'Private pools: CUDA graphs, MemPool, symmetric memory' },
   { id: 'edge', label: 'Awkward snapshots' },
 ]

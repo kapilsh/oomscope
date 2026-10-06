@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { bytes } from './lib/format.js'
-import { useStore, useDevice, TABS } from './store.js'
+import { useStore, useDevice, useView, TABS } from './store.js'
 import Overview from './components/Overview.jsx'
 import Segments from './components/Segments.jsx'
 import Allocations from './components/Allocations.jsx'
@@ -14,6 +14,7 @@ export default function App() {
   const clear = useStore((s) => s.clear)
   const setTab = useStore((s) => s.setTab)
   const device = useDevice()
+  const view = useView()
   const input = useRef(null)
 
   // Dropping a file anywhere on the page is the whole interaction, so catch it
@@ -93,10 +94,12 @@ export default function App() {
             {model.devices.length > 1 && <DevicePicker model={model} />}
           </div>
 
-          {tab === 'overview' && <Overview device={device} model={model} />}
-          {tab === 'segments' && <Segments device={device} />}
-          {tab === 'allocations' && <Allocations device={device} />}
-          {tab === 'timeline' && <Timeline device={device} />}
+          {device.pools.length > 0 && <PoolPicker device={device} />}
+
+          {tab === 'overview' && <Overview device={view} model={model} />}
+          {tab === 'segments' && <Segments device={view} />}
+          {tab === 'allocations' && <Allocations device={view} />}
+          {tab === 'timeline' && <Timeline device={view} />}
         </>
       )}
 
@@ -143,6 +146,34 @@ function DevicePicker({ model }) {
       {model.devices.map((d) => (
         <button key={d.id} className={d.id === device ? 'on' : ''} onClick={() => setDevice(d.id)}>
           cuda:{d.id} · {bytes(d.stats.reserved)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Only drawn when the device has a private pool. Every view below follows the
+ * choice, so "is this graph pool fragmented" is the same question as "is this
+ * device", asked of a smaller set of segments.
+ */
+function PoolPicker({ device }) {
+  const pool = useStore((s) => s.pool)
+  const setPool = useStore((s) => s.setPool)
+  return (
+    <div className="poolpick">
+      <span className="lbl">pool</span>
+      <button className={pool == null ? 'on' : ''} onClick={() => setPool(null)}>
+        all · {bytes(device.stats.reserved)}
+      </button>
+      {device.pools.map((p) => (
+        <button
+          key={p.key}
+          className={`${p.key === pool ? 'on' : ''} k-${p.kind}`}
+          onClick={() => setPool(p.key)}
+          title={`${p.origin}\n${p.evidence}`}
+        >
+          <i />{p.label} <span className="mono">({p.poolId.join(', ')})</span> · {bytes(p.stats.reserved)}
         </button>
       ))}
     </div>

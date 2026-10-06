@@ -14,16 +14,18 @@ export const useStore = create((set, get) => ({
   loading: false,
   tab: 'overview',
   device: 0,
+  pool: null, // pool key within the device, or null for all of it
   selectedBlock: null, // {segment, block} from the segment map
   expandedBlame: null, // frame key whose stack is open
 
   setTab: (tab) => set({ tab }),
-  setDevice: (device) => set({ device, selectedBlock: null }),
+  setDevice: (device) => set({ device, pool: null, selectedBlock: null, expandedBlame: null }),
+  setPool: (pool) => set({ pool, selectedBlock: null, expandedBlame: null }),
   selectBlock: (sel) => set({ selectedBlock: sel }),
   toggleBlame: (key) => set({ expandedBlame: get().expandedBlame === key ? null : key }),
   clear: () => set({
     model: null, fileName: null, fileBytes: 0, parseMs: 0,
-    error: null, selectedBlock: null, expandedBlame: null, tab: 'overview', device: 0,
+    error: null, selectedBlock: null, expandedBlame: null, tab: 'overview', device: 0, pool: null,
   }),
 
   /** @param {File|{name:string, buffer:ArrayBuffer}} file */
@@ -42,6 +44,7 @@ export const useStore = create((set, get) => ({
         parseMs,
         loading: false,
         device: model.devices[0]?.id ?? 0,
+        pool: null,
         tab: 'overview',
         selectedBlock: null,
         expandedBlame: null,
@@ -58,4 +61,15 @@ export function useDevice() {
     if (!s.model) { return null }
     return s.model.devices.find((d) => d.id === s.device) ?? s.model.devices[0] ?? null
   })
+}
+
+/**
+ * What the views render: the whole device, or one pool of it. A pool is
+ * shaped like a device, so no view needs to know which it was handed.
+ */
+export function useView() {
+  const device = useDevice()
+  const pool = useStore((s) => s.pool)
+  if (!device || pool == null) { return device }
+  return device.pools.find((p) => p.key === pool) ?? device
 }

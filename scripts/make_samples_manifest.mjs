@@ -28,6 +28,8 @@ for (const file of readdirSync(DIR).filter((f) => f.endsWith('.pickle')).sort())
     reserved: model.devices.reduce((n, x) => n + x.stats.reserved, 0),
     active: model.devices.reduce((n, x) => n + x.stats.active, 0),
     segments: model.devices.reduce((n, x) => n + x.stats.segmentCount, 0),
+    // Pools on the busiest device; 1 when there is only the default pool.
+    pools: Math.max(1, ...model.devices.map((x) => x.pools.length)),
     utilisation: d ? d.stats.utilisation : 0,
     fragmentation: d ? d.stats.fragmentation : 0,
     traceEvents: model.devices.reduce((n, x) => n + x.timeline.points.length, 0),

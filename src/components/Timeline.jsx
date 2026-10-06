@@ -24,6 +24,18 @@ export default function Timeline({ device }) {
   // path segments, and downsampling by max keeps the peaks that matter.
   const series = useMemo(() => downsample(tl.points, W - PAD.l - PAD.r), [tl.points])
 
+  if (!tl.hasTrace && device.pool) {
+    return (
+      <div className="card">
+        <h3>Timeline</h3>
+        <p className="sub">
+          No recorded event landed in this pool's surviving segments — either the trace was not
+          recording when it filled, or the ring buffer has since wrapped past it.
+        </p>
+      </div>
+    )
+  }
+
   if (!tl.hasTrace) {
     return (
       <div className="card">
@@ -113,6 +125,15 @@ torch.cuda.memory._dump_snapshot("snap.pickle")`}
             <span className="muted">hover the chart for a value</span>
           )}
         </div>
+
+        {device.pool && (
+          <p className="note">
+            Only the events that landed in this pool. The trace does not record pools, so each event
+            is placed by its address inside a segment that still exists at snapshot time, after that
+            segment was allocated. The x-axis counts this pool's events, not the device's.
+            {device.pool.attributionNote && ` ${device.pool.attributionNote}`}
+          </p>
+        )}
 
         {tl.truncated && (
           <p className="note warn">
