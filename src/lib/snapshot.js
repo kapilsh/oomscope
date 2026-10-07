@@ -70,6 +70,7 @@ export function parseSnapshot(raw) {
       .filter((s) => (s.device ?? 0) === id)
       .map(normaliseSegment)
       .sort((a, b) => a.address - b.address)
+    nameStreams(segments)
     const trace = traces[id] ?? []
     const device = {
       id,
@@ -88,6 +89,19 @@ export function parseSnapshot(raw) {
     devices,
     allocatorSettings: raw.allocator_settings ?? null,
     hasAnyTrace: devices.some((d) => d.timeline.hasTrace),
+  }
+}
+
+/**
+ * A snapshot records a stream as its cudaStream_t handle -- a host pointer
+ * like 96776797142688, which nobody can compare by eye. Number the side
+ * streams per device, in address order, so a stream has one name in every
+ * view and pool.
+ */
+function nameStreams(segments) {
+  const side = [...new Set(segments.map((s) => s.stream))].filter((s) => s !== 0).sort((a, b) => a - b)
+  for (const seg of segments) {
+    seg.streamName = seg.stream === 0 ? 'default stream' : `side stream ${side.indexOf(seg.stream) + 1}`
   }
 }
 

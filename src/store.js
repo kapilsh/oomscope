@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { unpickle } from './lib/unpickle.js'
 import { parseSnapshot } from './lib/snapshot.js'
 
-export const TABS = ['overview', 'segments', 'allocations', 'timeline']
+export const TABS = ['overview', 'segments', 'structure', 'allocations', 'timeline']
 
 export const useStore = create((set, get) => ({
   model: null,

@@ -19,6 +19,7 @@ Everything runs in the browser. The file is never uploaded, and nothing inside i
 | --- | --- |
 | **Overview** | Reserved vs. allocated vs. stranded, and a plain-language read of what those numbers mean — fragmentation, rounding waste, small-pool memory your activations can never use. |
 | **Segments** | The memory map: every segment `cudaMalloc` handed over, drawn to scale, block by block. A row that is mostly dark with green specks is a segment that can neither be released nor reused. Click any block for the stack that allocated it. |
+| **Structure** | The allocator's own hierarchy as a graph: device → pool → free list (pool × large/small × stream, the set a request can actually reuse from) → segment → the line of code holding it. Heights are bytes, ribbons split live from cached. Click any node to follow its bytes through; a segment opens its blocks, a block its stack, a source every segment it pins. |
 | **Allocations** | Every live block grouped by the line in *your* code that made it. This is usually where the investigation ends. |
 | **Timeline** | Reserved and allocated over the recorded trace, with OOM events marked. A step up in reserved that never comes back down, while allocated stays flat, is fragmentation happening in front of you. |
 

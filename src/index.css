@@ -309,3 +309,44 @@ footer {
 }
 .sample .b { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
 .sample .m { font-size: 11.5px; color: var(--text-faint); margin-top: auto; padding-top: 4px; }
+
+/* ---- allocator structure graph ----------------------------------------- */
+
+.structure-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.chart.structure { min-width: 880px; user-select: none; }
+.structure .colhdr {
+  fill: var(--text-faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; font-weight: 650;
+}
+.structure .rb { transition: opacity .12s; }
+.structure .rb.live { fill: var(--blk-active); opacity: .38; }
+.structure .rb.free { fill: var(--blk-free-edge); opacity: .55; }
+.structure .rb.hl { opacity: .9; }
+.structure .dim .rb:not(.hl) { opacity: .08; }
+.structure .node { cursor: pointer; }
+.structure .node .hit { fill: transparent; }
+.structure .node .box { fill: var(--blk-free-edge); }
+.structure .node .fill { fill: var(--blk-active); }
+.structure .n-device .box { fill: var(--text-dim); }
+.structure .n-pool .box, .structure .n-freelist .box { fill: var(--pool-kind, var(--pool-default)); }
+.structure .n-source .box { fill: var(--blk-active); }
+.structure .n-free .box { fill: var(--blk-free-edge); }
+.structure .node.dim { opacity: .25; }
+.structure .node:hover .box, .structure .node.on .box { stroke: var(--text); stroke-width: 1.5; }
+.structure .lbl {
+  font-size: 12px; fill: var(--text); pointer-events: none;
+  paint-order: stroke; stroke: var(--bg-card); stroke-width: 4px; stroke-linejoin: round;
+}
+.structure .lbl.small { font-size: 10.5px; fill: var(--text-dim); }
+.structure .lbl .val { fill: var(--text-dim); font-size: 11px; }
+.structure .n-source .lbl .name { font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 11.5px; }
+
+.sdetail .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; font-size: 12.5px; color: var(--text-dim); margin: 6px 0 8px; }
+.sdetail .row.big b { font-size: 19px; color: var(--text); letter-spacing: -.3px; }
+.sdetail .crumbs { font-size: 12.5px; color: var(--text-dim); margin-bottom: 10px; }
+.sdetail .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; }
+.chip {
+  background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--text);
+  border-radius: 6px; padding: 3px 9px; font-size: 12px;
+}
+.chip:hover { border-color: var(--nv-green); }
+.blocks button.mute { filter: brightness(.45); }

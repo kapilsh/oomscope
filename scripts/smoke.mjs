@@ -31,6 +31,7 @@ import Overview from '${SRC}/components/Overview.jsx'
 import Segments from '${SRC}/components/Segments.jsx'
 import Allocations from '${SRC}/components/Allocations.jsx'
 import Timeline from '${SRC}/components/Timeline.jsx'
+import Structure from '${SRC}/components/Structure.jsx'
 import SamplePicker from '${SRC}/components/SamplePicker.jsx'
 import App from '${SRC}/App.jsx'
 
@@ -50,6 +51,7 @@ function views(device, model) {
   for (const [name, C, props] of [
     ['overview', Overview, { device, model }],
     ['segments', Segments, { device }],
+    ['structure', Structure, { device }],
     ['allocations', Allocations, { device }],
     ['timeline', Timeline, { device }],
   ]) {
@@ -136,6 +138,7 @@ try {
     const floors = {
       overview: 500, // always has tiles and a diagnosis, even at zero bytes
       segments: hasSegments ? 500 : 1,
+      structure: hasSegments ? 500 : 1,
       allocations: d && d.blame.length > 0 ? 500 : 1,
       timeline: d && d.timeline.hasTrace ? 500 : 1,
     }

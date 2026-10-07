@@ -135,7 +135,7 @@ function Segment({ seg, pool, selected, onSelect }) {
             {pool.label} ({pool.poolId.join(', ')})
           </span>
         )}
-        {seg.stream !== 0 && <span className="tag">stream {seg.stream}</span>}
+        {seg.stream !== 0 && <span className="tag" title={`cudaStream_t ${addr(seg.stream)}`}>{seg.streamName}</span>}
         <span>{bytes(seg.activeSize)} live</span>
         <span>·</span>
         <span>{bytes(free)} free{fragments > 1 ? ` in ${fragments} pieces` : ''}</span>
@@ -168,7 +168,7 @@ function Segment({ seg, pool, selected, onSelect }) {
   )
 }
 
-function BlockDetail({ seg, block }) {
+export function BlockDetail({ seg, block }) {
   const frame = blameFrame(block.frames)
   const waste = block.size - block.requestedSize
   return (

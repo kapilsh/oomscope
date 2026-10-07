@@ -6,6 +6,7 @@ import Overview from './components/Overview.jsx'
 import Segments from './components/Segments.jsx'
 import Allocations from './components/Allocations.jsx'
 import Timeline from './components/Timeline.jsx'
+import Structure from './components/Structure.jsx'
 import SamplePicker from './components/SamplePicker.jsx'
 
 export default function App() {
@@ -98,6 +99,7 @@ export default function App() {
 
           {tab === 'overview' && <Overview device={view} model={model} />}
           {tab === 'segments' && <Segments device={view} />}
+          {tab === 'structure' && <Structure device={view} />}
           {tab === 'allocations' && <Allocations device={view} />}
           {tab === 'timeline' && <Timeline device={view} />}
         </>
