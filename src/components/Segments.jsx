@@ -5,6 +5,7 @@ import { blameFrame, frameLabel, displayStack } from '../lib/frames.js'
 import { BlockState } from '../lib/snapshot.js'
 import { useStore } from '../store.js'
 import Stack from './Stack.jsx'
+import Meta from './Meta.jsx'
 
 const SORTS = {
   address: (a, b) => a.address - b.address,
@@ -136,6 +137,7 @@ function Segment({ seg, pool, selected, onSelect }) {
           </span>
         )}
         {seg.stream !== 0 && <span className="tag" title={`cudaStream_t ${addr(seg.stream)}`}>{seg.streamName}</span>}
+        {seg.metadata && <Meta text={seg.metadata} clip={40} extra="on this segment's segment_alloc" />}
         <span>{bytes(seg.activeSize)} live</span>
         <span>·</span>
         <span>{bytes(free)} free{fragments > 1 ? ` in ${fragments} pieces` : ''}</span>
@@ -190,6 +192,17 @@ export function BlockDetail({ seg, block }) {
       )}
       {frame && (
         <div className="row"><span>allocated at <b className="mono">{frameLabel(frame)}</b></span></div>
+      )}
+      {block.metadata && (
+        <div className="row"><span>user_metadata</span><Meta text={block.metadata} clip={200} /></div>
+      )}
+      {block.annotations?.length > 0 && (
+        <div className="row">
+          <span>annotated</span>
+          {block.annotations.map((a, i) => (
+            <Meta key={i} text={a.text} clip={80} extra={a.frames.length ? `by ${frameLabel(blameFrame(a.frames))}` : ''} />
+          ))}
+        </div>
       )}
       <Stack frames={displayStack(block.frames)} limit={30} />
     </div>

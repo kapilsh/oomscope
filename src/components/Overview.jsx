@@ -1,5 +1,6 @@
 import { bytes, pct, count } from '../lib/format.js'
 import { useStore } from '../store.js'
+import Meta from './Meta.jsx'
 
 function Tile({ k, v, n, tone }) {
   return (
@@ -186,6 +187,14 @@ function Pools({ pools, current, onPick }) {
                     <i />{p.label} <span className="mono muted">({p.poolId.join(', ')})</span>
                   </div>
                   <div className="muted small" style={{ marginTop: 3, lineHeight: 1.5 }}>{p.origin}</div>
+                  {p.metadata?.length > 0 && (
+                    <div className="metas">
+                      {p.metadata.slice(0, 4).map((m) => (
+                        <Meta key={m.text} text={m.text} clip={36} extra={`on ${count(m.n)} allocation event${m.n === 1 ? '' : 's'} in this pool`} />
+                      ))}
+                      {p.metadata.length > 4 && <span className="faint">+{p.metadata.length - 4}</span>}
+                    </div>
+                  )}
                 </td>
                 <td className="r num">{bytes(st.reserved)}</td>
                 <td className="r num">{bytes(st.active)}</td>
@@ -211,6 +220,13 @@ function formatSetting(v) {
   if (v === true) { return 'true' }
   if (v === false) { return 'false' }
   if (v === null || v === undefined || v === '') { return '—' }
+  // Newer torch reports some settings as maps -- roundup_power2_divisions is
+  // {size: divisions} over every power of two -- where 0 means "not set".
+  // Show only what was set, so a default reads as a default.
+  if (typeof v === 'object') {
+    const set = Object.entries(v).filter(([, x]) => x !== 0 && x !== false && x !== '' && x != null)
+    return set.length ? set.map(([k, x]) => `${k}: ${formatSetting(x)}`).join(', ') : '—'
+  }
   return String(v)
 }
 

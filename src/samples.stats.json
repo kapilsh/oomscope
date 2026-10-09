@@ -208,5 +208,19 @@
     "oomEvents": 0,
     "truncated": false,
     "hasTrace": true
+  },
+  "16-named-pools.pickle": {
+    "fileBytes": 596600,
+    "devices": 1,
+    "reserved": 606076928,
+    "active": 485210624,
+    "segments": 38,
+    "pools": 4,
+    "utilisation": 0.8005759691284602,
+    "fragmentation": 0.7917879246146221,
+    "traceEvents": 2598,
+    "oomEvents": 0,
+    "truncated": false,
+    "hasTrace": true
   }
 }

@@ -28,6 +28,11 @@
   --pool-mempool: #38bdf8;
   --pool-symmetric: #f472b6;
 
+  /* user_metadata: the user's own words, so a warm hue nothing else uses. */
+  --meta: #f5c97a;
+  --meta-bg: rgba(245, 201, 122, .08);
+  --meta-edge: rgba(245, 201, 122, .28);
+
   /* Curves: reserved is the ceiling you pay for, allocated the floor you use. */
   --line-reserved: #3987e5;
   --line-allocated: #76b900;
@@ -350,3 +355,13 @@ footer {
 }
 .chip:hover { border-color: var(--nv-green); }
 .blocks button.mute { filter: brightness(.45); }
+
+/* ---- user_metadata ----------------------------------------------------- */
+
+code.meta {
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: middle; font-size: 11px; line-height: 1.5;
+  color: var(--meta); background: var(--meta-bg); border: 1px solid var(--meta-edge);
+  border-radius: 4px; padding: 0 6px;
+}
+.metas { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }

@@ -11,7 +11,10 @@
 //   device_traces[] per device, a list of
 //                   {action, addr, size, stream, time_us, compile_context, frames[]}
 //                   action in alloc | free_requested | free_completed |
-//                   segment_alloc | segment_free | oom | snapshot
+//                   segment_alloc | segment_free | oom | snapshot | annotate
+//                   newer torch adds pool_id (the event's pool) and
+//                   user_metadata (whatever _set_memory_metadata held on the
+//                   allocating thread, or the note for an annotate event)
 //
 // Two distinctions drive everything downstream, and conflating them is the
 // usual reason a memory bug stays mysterious:
@@ -72,6 +75,7 @@ export function parseSnapshot(raw) {
       .sort((a, b) => a.address - b.address)
     nameStreams(segments)
     const trace = traces[id] ?? []
+    const hasMetadata = attachMetadata(trace, segments)
     const device = {
       id,
       segments,
@@ -80,6 +84,7 @@ export function parseSnapshot(raw) {
       blame: computeBlame(segments),
       pool: null, // this is the whole device, not one pool of it
       pools: [],
+      hasMetadata,
     }
     device.pools = buildPools(device, trace)
     return device
@@ -102,6 +107,65 @@ function nameStreams(segments) {
   const side = [...new Set(segments.map((s) => s.stream))].filter((s) => s !== 0).sort((a, b) => a - b)
   for (const seg of segments) {
     seg.streamName = seg.stream === 0 ? 'default stream' : `side stream ${side.indexOf(seg.stream) + 1}`
+  }
+}
+
+/**
+ * Carry user_metadata from the trace onto what is alive at snapshot time.
+ *
+ * Segments and blocks have no metadata of their own -- torch only stamps it on
+ * trace events -- so replay the trace: a live block's metadata is the one on
+ * the alloc that made it (the last alloc at its address not since freed), and
+ * its annotations are the annotate events at that address after that alloc.
+ * A segment's is the one on its segment_alloc. Returns whether the trace has
+ * any metadata at all, so views can say nothing when there is nothing.
+ */
+function attachMetadata(trace, segments) {
+  const live = new Map()
+  const segMeta = new Map()
+  let any = false
+  for (const e of trace) {
+    const meta = typeof e.user_metadata === 'string' ? e.user_metadata : ''
+    if (meta) { any = true }
+    switch (e.action) {
+      case 'alloc': live.set(e.addr, { metadata: meta, annotations: [] }); break
+      case 'free_completed': live.delete(e.addr); break
+      case 'annotate': {
+        const b = live.get(e.addr)
+        if (b) { b.annotations.push({ text: meta, frames: e.frames ?? [] }) }
+        break
+      }
+      case 'segment_alloc':
+      case 'segment_map': segMeta.set(e.addr, meta); break
+      case 'segment_free':
+      case 'segment_unmap': segMeta.delete(e.addr); break
+      default: break
+    }
+  }
+  for (const seg of segments) {
+    seg.metadata = segMeta.get(seg.address) ?? ''
+    for (const b of seg.blocks) {
+      const m = b.active ? live.get(b.address) : null
+      b.metadata = m?.metadata ?? ''
+      b.annotations = m?.annotations ?? []
+    }
+  }
+  return any
+}
+
+/**
+ * A short name out of a metadata string, if it carries one: the `pool` or
+ * `name` field of a JSON object (what `_set_memory_metadata({"pool": ...})`
+ * writes), or null. Free-form strings are shown as they are, not named from.
+ */
+export function metadataName(meta) {
+  if (!meta || meta[0] !== '{') { return null }
+  try {
+    const o = JSON.parse(meta)
+    const v = o?.pool ?? o?.name
+    return typeof v === 'string' && v ? v : null
+  } catch {
+    return null
   }
 }
 
@@ -315,6 +379,7 @@ function computeBlame(segments) {
           count: 0,
           stack: displayStack(b.frames),
           largest: 0,
+          metadata: new Map(), // user_metadata -> bytes
         }
         groups.set(key, g)
       }
@@ -322,6 +387,7 @@ function computeBlame(segments) {
       g.requested += b.requestedSize
       g.count += 1
       if (b.size > g.largest) { g.largest = b.size }
+      if (b.metadata) { g.metadata.set(b.metadata, (g.metadata.get(b.metadata) ?? 0) + b.size) }
     }
   }
   return [...groups.values()].sort((a, b) => b.bytes - a.bytes)
@@ -350,15 +416,15 @@ function buildPools(device, trace) {
   // A lone private pool is still worth naming; a lone default pool is not.
   if (byKey.size === 0 || (byKey.size === 1 && byKey.has(DEFAULT_POOL))) { return [] }
 
-  const owner = attributeTrace(trace, device.segments)
+  const { owner, exact } = attributeTrace(trace, device.segments)
   const pools = []
   for (const [key, segments] of byKey) {
-    const events = trace.filter((_, i) => owner[i] === key || (key === DEFAULT_POOL && owner[i] === null))
+    const events = trace.filter((_, i) => owner[i] === key || (!exact && key === DEFAULT_POOL && owner[i] === null))
     pools.push({
       id: device.id,
       key,
       poolId: key.split(',').map(Number),
-      ...classifyPool(key, segments, events),
+      ...nameFromMetadata(classifyPool(key, segments, events), segments, events),
       segments,
       stats: computeStats(segments),
       blame: computeBlame(segments),
@@ -369,7 +435,8 @@ function buildPools(device, trace) {
         .reduce((n, sg) => n + sg.totalSize, 0)),
       // When the default pool is picked out, it also stands in for every event
       // the trace has that no surviving private segment explains.
-      attributionNote: key === DEFAULT_POOL
+      exactTrace: exact,
+      attributionNote: key === DEFAULT_POOL && !exact
         ? 'Events in segments that were released before the snapshot are counted here: the trace does not say which pool those belonged to.'
         : null,
     })
@@ -395,7 +462,10 @@ function buildPools(device, trace) {
  */
 function attributeTrace(trace, segments) {
   const owner = new Array(trace.length).fill(null)
-  if (trace.length === 0 || segments.length === 0) { return owner }
+  // Newer torch stamps every event with its pool, which settles it -- for
+  // events in long-gone segments too. Fall back to addresses only without.
+  const exact = trace.length > 0 && trace.every((e) => Array.isArray(e.pool_id) || e.action === 'oom' || e.action === 'snapshot')
+  if (trace.length === 0 || segments.length === 0) { return { owner, exact } }
 
   const lastAlloc = new Map()
   trace.forEach((e, i) => {
@@ -403,6 +473,10 @@ function attributeTrace(trace, segments) {
   })
   for (const seg of segments) {
     seg.allocIndex = lastAlloc.get(seg.address) ?? -1
+  }
+  if (exact) {
+    trace.forEach((e, i) => { if (Array.isArray(e.pool_id)) { owner[i] = poolKey(e.pool_id) } })
+    return { owner, exact }
   }
 
   // segments is sorted by address and segments never overlap, so a binary
@@ -423,7 +497,46 @@ function attributeTrace(trace, segments) {
       }
     }
   })
-  return owner
+  return { owner, exact }
+}
+
+/**
+ * A pool the user labelled. The snapshot gives a pool no name, but a
+ * `_set_memory_metadata({"pool": "kv-cache"})` around its allocations stamps
+ * one on every event that fills it. Take the most common such name on the
+ * pool's segment_allocs (else its allocs), and keep every distinct metadata
+ * string seen in the pool so the views can show them as they were written.
+ */
+function nameFromMetadata(cls, segments, events) {
+  const tally = (pred) => {
+    const m = new Map()
+    for (const e of events) {
+      if (pred(e) && e.user_metadata) { m.set(e.user_metadata, (m.get(e.user_metadata) ?? 0) + 1) }
+    }
+    return m
+  }
+  const all = tally((e) => e.action === 'alloc' || e.action === 'segment_alloc' || e.action === 'segment_map')
+  for (const s of segments) { if (s.metadata && !all.has(s.metadata)) { all.set(s.metadata, 1) } }
+  const metadata = [...all].sort((a, b) => b[1] - a[1]).map(([text, n]) => ({ text, n }))
+
+  const pick = (m) => {
+    let best = null, bestN = 0
+    for (const [text, n] of m) {
+      const name = metadataName(text)
+      if (name && n > bestN) { best = { name, text }; bestN = n }
+    }
+    return best
+  }
+  const named = pick(tally((e) => e.action === 'segment_alloc' || e.action === 'segment_map')) ?? pick(all)
+  if (!named) { return { ...cls, kindLabel: cls.label, name: null, metadata } }
+  return {
+    ...cls,
+    kindLabel: cls.label,
+    name: named.name,
+    label: `${named.name} · ${cls.label}`,
+    evidence: `${cls.evidence}; named by user_metadata ${named.text}`,
+    metadata,
+  }
 }
 
 const isGraphTreesFrame = (f) => /torch\/_inductor\/cudagraph_trees\.py$/.test(f.filename ?? '')

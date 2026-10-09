@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { bytes, pct, count } from '../lib/format.js'
 import { useStore } from '../store.js'
 import Stack from './Stack.jsx'
+import Meta from './Meta.jsx'
 
 /**
  * Who is holding memory, by the line that allocated it.
@@ -22,6 +23,7 @@ export default function Allocations({ device }) {
     if (!needle) { return device.blame }
     return device.blame.filter((g) =>
       g.label.toLowerCase().includes(needle) ||
+      [...g.metadata.keys()].some((m) => m.toLowerCase().includes(needle)) ||
       g.stack.some((f) => `${f.filename} ${f.name}`.toLowerCase().includes(needle)),
     )
   }, [device.blame, q])
@@ -53,7 +55,7 @@ export default function Allocations({ device }) {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="filter by file, function, or frame…"
+          placeholder={device.blame.some((g) => g.metadata.size) ? 'filter by file, function, frame or metadata…' : 'filter by file, function, or frame…'}
           style={{
             flex: '1 1 260px', background: 'var(--bg-elevated)', color: 'var(--text)',
             border: '1px solid var(--border-strong)', borderRadius: 7, padding: '6px 10px',
@@ -86,6 +88,14 @@ export default function Allocations({ device }) {
                 <td className="mono">
                   <span style={{ color: 'var(--text-faint)', marginRight: 6 }}>{open ? '▾' : '▸'}</span>
                   {g.label}
+                  {g.metadata.size > 0 && (
+                    <div className="metas">
+                      {[...g.metadata].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([m, n]) => (
+                        <Meta key={m} text={m} clip={36} extra={`${bytes(n)} of this source's live bytes`} />
+                      ))}
+                      {g.metadata.size > 4 && <span className="faint">+{g.metadata.size - 4}</span>}
+                    </div>
+                  )}
                 </td>
                 <td className="r num">{bytes(g.bytes)}</td>
                 <td className="r num muted">{pct(total ? g.bytes / total : 0)}</td>

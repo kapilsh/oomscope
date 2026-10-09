@@ -6,6 +6,7 @@ import { buildStructure, layoutStructure, lineage, blockSourceId, COLUMNS } from
 import { useStore } from '../store.js'
 import { BlockDetail } from './Segments.jsx'
 import Stack from './Stack.jsx'
+import Meta from './Meta.jsx'
 
 const W = 1200
 const NODE_W = 12
@@ -205,7 +206,8 @@ function clip(s, n) {
 
 function tooltip(n) {
   const head = n.kind === 'segment' ? `segment ${addr(n.seg.address)}` : n.label
-  return `${head}\n${bytes(n.value)} — ${bytes(n.live)} live, ${bytes(n.free)} free`
+  const meta = n.kind === 'segment' && n.seg.metadata ? `\nuser_metadata: ${n.seg.metadata}` : ''
+  return `${head}\n${bytes(n.value)} — ${bytes(n.live)} live, ${bytes(n.free)} free${meta}`
 }
 
 /** A ribbon of width w from (x0, y0) to (x1, y1), as a filled bezier band. */
@@ -307,6 +309,7 @@ function SegmentDetail({ graph, node, onSelect }) {
             : ' Nothing in it is live, so it is being kept purely as cache; torch.cuda.empty_cache() would release it.'}
           {free.length > 0 && ` Its largest free block is ${bytes(largest)}; a bigger request cannot use this segment.`}
         </p>
+        {seg.metadata && <div className="row"><span>allocated under</span><Meta text={seg.metadata} clip={200} /></div>}
       </Head>
 
       <div className="blocks" style={{ marginTop: 4 }}>
@@ -388,6 +391,14 @@ function SourceDetail({ graph, node, onSelect }) {
     <div className="card sdetail">
       <Head title={node.other ? 'Other sources' : 'Source'} node={node}>
         {!node.other && <div className="row"><b className="mono">{node.label}</b></div>}
+        {node.blame?.metadata.size > 0 && (
+          <div className="row">
+            <span>user_metadata</span>
+            {[...node.blame.metadata].sort((a, b) => b[1] - a[1]).map(([m, n]) => (
+              <Meta key={m} text={m} clip={60} extra={`${bytes(n)} of this source's live bytes`} />
+            ))}
+          </div>
+        )}
         <p className="sub">
           {count(rows.reduce((a, r) => a + r.n, 0))} live blocks across {count(rows.length)} segment{rows.length === 1 ? '' : 's'}.
           {pinnedFree > 0 && ` Those segments also hold ${bytes(pinnedFree)} of cached free space that cannot go back to the driver while these blocks live.`}
@@ -462,6 +473,12 @@ function GroupDetail({ graph, node, onSelect }) {
         <p className="sub">
           {node.kind === 'device' && <>Everything the caching allocator has taken from the driver: {count(segs.length)} segments. This is what <code>nvidia-smi</code> bills to the process, less the CUDA context.</>}
           {node.kind === 'pool' && <>{node.pool.origin} <span className="faint">({node.pool.evidence})</span> A free block here can only serve an allocation routed to this pool.</>}
+          {node.kind === 'pool' && node.pool.metadata?.length > 0 && (
+            <span className="row">
+              <span>user_metadata on its allocations</span>
+              {node.pool.metadata.map((m) => <Meta key={m.text} text={m.text} clip={60} extra={`${count(m.n)} events`} />)}
+            </span>
+          )}
           {node.kind === 'freelist' && (
             <>
               The allocator keeps {node.type} blocks apart from {node.type === 'large' ? 'small' : 'large'} ones, and only

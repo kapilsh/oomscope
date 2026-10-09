@@ -369,6 +369,75 @@ def symmetric_pool_standin():
     return locals()
 
 
+@scenario("16-named-pools.pickle",
+          "user_metadata (torch >= 2.16): pools named with _set_memory_metadata, phases tagged, "
+          "a buffer annotated. Needs a torch that stamps pool_id and user_metadata on trace events.")
+def named_pools():
+    # A snapshot gives a pool an id and nothing else. _set_memory_metadata
+    # stamps a string on every trace event the calling thread makes while it
+    # is set, so wrapping a pool's allocations in {"pool": ...} is how a pool
+    # gets a name -- and tagging training phases the same way labels the
+    # default pool's allocations too. _annotate_tensor adds a note to a
+    # buffer that already exists.
+    import contextlib
+    import subprocess
+    import tempfile
+    import torch
+
+    set_meta = torch.cuda.memory._set_memory_metadata
+    if not hasattr(torch.cuda.memory, "_annotate_tensor"):
+        raise SystemExit("this torch has no memory metadata; run with a 2.16+ nightly")
+
+    @contextlib.contextmanager
+    def meta(m):
+        set_meta(m)
+        try:
+            yield
+        finally:
+            set_meta("")
+
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    (tmp / "standin.c").write_text(_STANDIN_ALLOCATOR)
+    subprocess.run(["gcc", "-shared", "-fPIC", "-o", tmp / "standin.so", tmp / "standin.c"], check=True)
+    alloc = torch.cuda.memory.CUDAPluggableAllocator(str(tmp / "standin.so"), "standin_alloc", "standin_free")
+
+    torch.cuda.memory._record_memory_history(max_entries=80_000)
+    with meta({"phase": "init"}):
+        model, d = _model()
+        opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+    # Gradient buckets for a collective, from a pluggable allocator -- the
+    # way NCCL's ncclMemAlloc pool is plugged in -- named so the snapshot
+    # says what the pool is for, not just (0, N).
+    comm_pool = torch.cuda.MemPool(alloc.allocator())
+    with meta({"pool": "comm-buffers", "backend": "nccl"}), torch.cuda.use_mem_pool(comm_pool):
+        buckets = [torch.empty(25 * 1024 * 1024 // 4, dtype=torch.float32, device="cuda") for _ in range(4)]
+    torch.cuda.memory._annotate_tensor(buckets[0], "bucket 0: last layer grads, all-reduced first")
+
+    kv_pool = torch.cuda.MemPool()
+    with meta({"pool": "kv-cache", "layers": 4}), torch.cuda.use_mem_pool(kv_pool):
+        kv = [torch.empty(2, 8, 1024, d, dtype=torch.float16, device="cuda") for _ in range(4)]
+
+    # Free-form metadata: shown as written, but not taken as a name.
+    scratch_pool = torch.cuda.MemPool()
+    with meta("eval scratch, freed after use"), torch.cuda.use_mem_pool(scratch_pool):
+        scratch = [torch.empty((3 + i) * 1024 * 1024, dtype=torch.uint8, device="cuda") for i in range(6)]
+    del scratch[::2]
+
+    for step in range(2):
+        x = torch.randn(8, 256, d, device="cuda")
+        with meta({"phase": "forward", "step": step}):
+            loss = model(x).square().mean()
+        with meta({"phase": "backward", "step": step}):
+            loss.backward()
+        with meta({"phase": "optimizer", "step": step}):
+            opt.step()
+        opt.zero_grad(set_to_none=True)
+    with meta({"phase": "forward", "step": 2}):
+        held = model(torch.randn(8, 256, d, device="cuda"))  # activations still alive at the dump
+    return locals()
+
+
 # --------------------------------------------------------------------------
 # driver
 # --------------------------------------------------------------------------

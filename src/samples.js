@@ -96,6 +96,13 @@ const SAMPLES = [
     synthetic: 'stand-in allocator',
   },
   {
+    file: '16-named-pools.pickle',
+    title: 'Named pools, tagged phases',
+    blurb: 'Recorded on torch 2.16, whose trace events carry user_metadata and a pool id. Pools named with _set_memory_metadata({"pool": …}) show up by name, every block shows the phase it was allocated in, and one buffer carries an _annotate_tensor note. Backward is barely tagged: it runs on autograd\'s own thread, and the metadata is per-thread.',
+    group: 'pools',
+    look: 'overview',
+  },
+  {
     file: '06-truncated-trace.pickle',
     title: 'Truncated trace',
     blurb: 'Recorded with max_entries far too small, so the ring buffer wrapped and the trace begins mid-run. The curve shape is real; the baseline is shifted and flagged rather than quietly clamped.',

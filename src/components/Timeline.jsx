@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { bytes, bytesTick, count, duration } from '../lib/format.js'
 import { blameFrame, frameLabel, displayStack } from '../lib/frames.js'
 import Stack from './Stack.jsx'
+import Meta from './Meta.jsx'
 
 const W = 1000
 const H = 300
@@ -120,6 +121,7 @@ torch.cuda.memory._dump_snapshot("snap.pickle")`}
           {hoverPoint ? (
             <span className="num">
               event {hoverPoint.i} · <code>{hoverPoint.action}</code> · allocated {bytes(hoverPoint.allocated)} · reserved {bytes(hoverPoint.reserved)}
+              {tl.events[hoverPoint.i]?.user_metadata && <> · <Meta text={tl.events[hoverPoint.i].user_metadata} clip={40} /></>}
             </span>
           ) : (
             <span className="muted">hover the chart for a value</span>
@@ -128,9 +130,10 @@ torch.cuda.memory._dump_snapshot("snap.pickle")`}
 
         {device.pool && (
           <p className="note">
-            Only the events that landed in this pool. The trace does not record pools, so each event
-            is placed by its address inside a segment that still exists at snapshot time, after that
-            segment was allocated. The x-axis counts this pool's events, not the device's.
+            {device.pool.exactTrace
+              ? 'Only the events that landed in this pool, by the pool id each trace event carries.'
+              : 'Only the events that landed in this pool. This trace does not record pools (torch only started stamping them on events later), so each event is placed by its address inside a segment that still exists at snapshot time, after that segment was allocated.'}
+            {' '}The x-axis counts this pool's events, not the device's.
             {device.pool.attributionNote && ` ${device.pool.attributionNote}`}
           </p>
         )}
