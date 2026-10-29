@@ -1,0 +1,31 @@
+<!--
+  The mark: three segment rows, part live and part stranded. The app's own
+  segment map, shrunk. Same idea and palette as the other apps' favicons: a
+  dark rounded square with a #76b900 glyph.
+
+  The header in src/App.jsx draws this by hand rather than loading this file,
+  so it scales with the type around it. Change one, change both.
+
+  Note for editors: a double hyphen is illegal inside an XML comment, so this
+  file cannot use one as a dash. Browsers forgive it; strict parsers do not.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0b0f0a"/>
+  <g>
+    <!-- tracks: the full extent of each reserved segment -->
+    <g fill="#2f3d2a">
+      <rect x="6" y="7" width="20" height="4.5" rx="1.6"/>
+      <rect x="6" y="13.75" width="20" height="4.5" rx="1.6"/>
+      <rect x="6" y="20.5" width="20" height="4.5" rx="1.6"/>
+    </g>
+    <!-- live blocks: mostly full, then fragmented, then half -->
+    <g fill="#76b900">
+      <rect x="6" y="7" width="13.5" height="4.5" rx="1.6"/>
+      <rect x="21" y="7" width="5" height="4.5" rx="1.6"/>
+      <rect x="6" y="13.75" width="4.5" height="4.5" rx="1.6"/>
+      <rect x="12.5" y="13.75" width="3" height="4.5" rx="1.5"/>
+      <rect x="17.5" y="13.75" width="2.5" height="4.5" rx="1.25"/>
+      <rect x="6" y="20.5" width="9.5" height="4.5" rx="1.6"/>
+    </g>
+  </g>
+</svg>

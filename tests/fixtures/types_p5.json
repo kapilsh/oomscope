@@ -1,0 +1,211 @@
+{
+ "addr": 138772641480704,
+ "ascii": "alloc",
+ "empty_dict": {},
+ "empty_list": [],
+ "empty_tuple": [],
+ "false": false,
+ "float": 3.5,
+ "float_neg": -0.125,
+ "int_0": 0,
+ "int_255": 255,
+ "int_256": 256,
+ "int_2p31": 2147483648,
+ "int_2p48": 281474976710656,
+ "int_65535": 65535,
+ "int_65536": 65536,
+ "list_of_dicts": [
+  {
+   "i": 0,
+   "s": "f0"
+  },
+  {
+   "i": 1,
+   "s": "f1"
+  },
+  {
+   "i": 2,
+   "s": "f2"
+  },
+  {
+   "i": 3,
+   "s": "f3"
+  },
+  {
+   "i": 4,
+   "s": "f4"
+  },
+  {
+   "i": 5,
+   "s": "f5"
+  },
+  {
+   "i": 6,
+   "s": "f6"
+  },
+  {
+   "i": 7,
+   "s": "f7"
+  },
+  {
+   "i": 8,
+   "s": "f8"
+  },
+  {
+   "i": 9,
+   "s": "f9"
+  },
+  {
+   "i": 10,
+   "s": "f10"
+  },
+  {
+   "i": 11,
+   "s": "f11"
+  },
+  {
+   "i": 12,
+   "s": "f12"
+  },
+  {
+   "i": 13,
+   "s": "f13"
+  },
+  {
+   "i": 14,
+   "s": "f14"
+  },
+  {
+   "i": 15,
+   "s": "f15"
+  },
+  {
+   "i": 16,
+   "s": "f16"
+  },
+  {
+   "i": 17,
+   "s": "f17"
+  },
+  {
+   "i": 18,
+   "s": "f18"
+  },
+  {
+   "i": 19,
+   "s": "f19"
+  },
+  {
+   "i": 20,
+   "s": "f20"
+  },
+  {
+   "i": 21,
+   "s": "f21"
+  },
+  {
+   "i": 22,
+   "s": "f22"
+  },
+  {
+   "i": 23,
+   "s": "f23"
+  },
+  {
+   "i": 24,
+   "s": "f24"
+  },
+  {
+   "i": 25,
+   "s": "f25"
+  },
+  {
+   "i": 26,
+   "s": "f26"
+  },
+  {
+   "i": 27,
+   "s": "f27"
+  },
+  {
+   "i": 28,
+   "s": "f28"
+  },
+  {
+   "i": 29,
+   "s": "f29"
+  },
+  {
+   "i": 30,
+   "s": "f30"
+  },
+  {
+   "i": 31,
+   "s": "f31"
+  },
+  {
+   "i": 32,
+   "s": "f32"
+  },
+  {
+   "i": 33,
+   "s": "f33"
+  },
+  {
+   "i": 34,
+   "s": "f34"
+  },
+  {
+   "i": 35,
+   "s": "f35"
+  },
+  {
+   "i": 36,
+   "s": "f36"
+  },
+  {
+   "i": 37,
+   "s": "f37"
+  },
+  {
+   "i": 38,
+   "s": "f38"
+  },
+  {
+   "i": 39,
+   "s": "f39"
+  }
+ ],
+ "long_string": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+ "neg_big": -1099511627776,
+ "neg_small": -1,
+ "nested": {
+  "a": [
+   1,
+   {
+    "b": [
+     2,
+     3
+    ]
+   }
+  ],
+  "c": [
+   [],
+   {}
+  ]
+ },
+ "none": null,
+ "shared_a": {
+  "shared": true
+ },
+ "shared_b": {
+  "shared": true
+ },
+ "time_us": 1789995997101492,
+ "true": true,
+ "tuple2": [
+  0,
+  0
+ ],
+ "unicode": "segment \u2192 block \u00b5s \ud83e\uddea"
+}
