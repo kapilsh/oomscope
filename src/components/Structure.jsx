@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { bytes, addr, pct, count } from '../lib/format.js'
 import { BlockState } from '../lib/snapshot.js'
@@ -8,7 +8,13 @@ import { BlockDetail } from './Segments.jsx'
 import Stack from './Stack.jsx'
 import Meta from './Meta.jsx'
 
-const W = 1200
+// The drawing was designed 1200 wide: five columns, the last 320 from the
+// edge so source labels fit. Narrower boxes scale it down whole (labels
+// included, so nothing collides); wider ones spread the columns apart and keep
+// the text its real size.
+const BASE_W = 1200
+const MIN_RENDER_W = 880
+const LABEL_ROOM = 320
 const NODE_W = 12
 const XS = [0, 210, 420, 640, 880]
 const PAD = { t: 26, b: 8 }
@@ -25,17 +31,39 @@ const PAD = { t: 26, b: 8 }
  * sits in.
  */
 export default function Structure({ device }) {
+  const base = useMemo(() => buildStructure(device), [device])
+  const empty = device.segments.length === 0
+
+  // Lay out at the size the graph is given, so it fills the panel's height
+  // instead of taking whatever height its width implies.
+  const mainRef = useRef(null)
+  const [box, setBox] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) { return }
+    const ro = new ResizeObserver(([e]) => {
+      const w = Math.floor(e.contentRect.width), h = Math.floor(e.contentRect.height)
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [empty])
+  const renderW = Math.max(box.w, MIN_RENDER_W)
+  const W = Math.max(BASE_W, renderW)
+  const scale = renderW / W
+  const fitH = box.h ? Math.floor(box.h / scale - PAD.t - PAD.b) : 480
+
   const graph = useMemo(() => {
-    const g = buildStructure(device)
-    return { ...g, ...layoutStructure(g, { xs: XS, nodeW: NODE_W }) }
-  }, [device])
+    const xs = XS.map((x) => (x * (W - LABEL_ROOM)) / (BASE_W - LABEL_ROOM))
+    return { ...base, xs, W, ...layoutStructure(base, { xs, nodeW: NODE_W, height: fitH }) }
+  }, [base, W, fitH])
 
   const [selected, setSelected] = useState(null)
   const [hover, setHover] = useState(null)
   const sel = selected && graph.byId.has(selected) ? selected : null
   const focus = hover ?? sel
 
-  if (device.segments.length === 0) {
+  if (empty) {
     return (
       <div className="card">
         <h3>Allocator structure</h3>
@@ -45,30 +73,30 @@ export default function Structure({ device }) {
   }
 
   return (
-    <>
-      <div className="card">
-        <h3>Allocator structure</h3>
-        <p className="sub">
-          How the caching allocator holds this memory, left to right: the device, the pools it is
-          split into, the free lists inside each pool, the segments <code>cudaMalloc</code> returned,
-          and the lines of code holding them. Height is bytes. Green ribbons are live tensors, dark
-          ones are cached free space — which a request can only reuse from the same free list.
-          Click any node to follow it through.
-        </p>
-        <div className="legend" style={{ marginBottom: 10 }}>
-          <span><i style={{ background: 'var(--blk-active)' }} />live</span>
-          <span><i style={{ background: 'var(--blk-free-edge)' }} />cached free</span>
-          {graph.pools.length > 1 && graph.pools.map((p) => (
-            <span key={p.key} className={`k-${p.kind}`}><i style={{ background: 'var(--pool-kind)' }} />{p.label} ({p.poolId.join(', ')})</span>
-          ))}
-          {sel && (
-            <>
-              <span className="spacer" style={{ flex: 1 }} />
-              <button className="linkish" onClick={() => setSelected(null)}>clear selection</button>
-            </>
-          )}
-        </div>
-        <div className="structure-scroll">
+    <div className="card fill">
+      <h3>Allocator structure</h3>
+      <p className="sub">
+        How the caching allocator holds this memory, left to right: the device, the pools it is
+        split into, the free lists inside each pool, the segments <code>cudaMalloc</code> returned,
+        and the lines of code holding them. Height is bytes. Green ribbons are live tensors, dark
+        ones are cached free space — which a request can only reuse from the same free list.
+        Click any node to follow it through.
+      </p>
+      <div className="legend" style={{ marginBottom: 10 }}>
+        <span><i style={{ background: 'var(--blk-active)' }} />live</span>
+        <span><i style={{ background: 'var(--blk-free-edge)' }} />cached free</span>
+        {graph.pools.length > 1 && graph.pools.map((p) => (
+          <span key={p.key} className={`k-${p.kind}`}><i style={{ background: 'var(--pool-kind)' }} />{p.label} ({p.poolId.join(', ')})</span>
+        ))}
+        {sel && (
+          <>
+            <span className="spacer" style={{ flex: 1 }} />
+            <button className="linkish" onClick={() => setSelected(null)}>clear selection</button>
+          </>
+        )}
+      </div>
+      <div className="st-body">
+        <div className="st-main structure-scroll" ref={mainRef}>
           <Graph
             graph={graph}
             focus={focus}
@@ -77,24 +105,26 @@ export default function Structure({ device }) {
             onSelect={(id) => setSelected(id === sel ? null : id)}
           />
         </div>
-      </div>
 
-      {sel
-        ? <NodeDetail key={sel} graph={graph} node={graph.byId.get(sel)} onSelect={setSelected} />
-        : (
-          <div className="card">
-            <p className="sub" style={{ margin: 0 }}>
-              Select a node above. A <b>segment</b> opens its block map; a <b>block</b> shows the stack
-              that allocated it; a <b>source</b> lists every segment it is pinning.
-            </p>
-          </div>
-        )}
-    </>
+        {/* Beside the graph, so opening a segment's block map never pushes
+            the graph off screen. */}
+        <aside className="st-side">
+          {sel
+            ? <NodeDetail key={sel} graph={graph} node={graph.byId.get(sel)} onSelect={setSelected} />
+            : (
+              <p className="sub" style={{ margin: 0 }}>
+                Select a node. A <b>segment</b> opens its block map; a <b>block</b> shows the stack
+                that allocated it; a <b>source</b> lists every segment it is pinning.
+              </p>
+            )}
+        </aside>
+      </div>
+    </div>
   )
 }
 
 function Graph({ graph, focus, selected, onHover, onSelect }) {
-  const { nodes, links, byId, height } = graph
+  const { nodes, links, byId, height, W, xs } = graph
   const H = height + PAD.t + PAD.b
   const focusNode = focus ? byId.get(focus) : null
 
@@ -119,7 +149,7 @@ function Graph({ graph, focus, selected, onHover, onSelect }) {
       onMouseLeave={() => onHover(null)}
     >
       {COLUMNS.map((c, i) => (
-        <text key={c} className="colhdr" x={XS[i]} y={12}>{c}</text>
+        <text key={c} className="colhdr" x={xs[i]} y={12}>{c}</text>
       ))}
       <g transform={`translate(0 ${PAD.t})`}>
         <g className="ribbons">

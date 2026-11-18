@@ -61,13 +61,16 @@ button, input, select { font-family: inherit; }
 button { cursor: pointer; }
 ::selection { background: rgba(118, 185, 0, .3); }
 
-.app { max-width: 1240px; margin: 0 auto; padding: 0 16px 64px; }
+.app { margin: 0 auto; padding: 0 clamp(12px, 1.6vw, 28px) 20px; }
+/* The app spans the window, but running prose does not: past ~120 characters
+   a line is hard to read back. */
+.card > .sub, .note { max-width: 120ch; }
 
 /* ---- header ---------------------------------------------------------- */
 
 .top {
   display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
-  padding: 28px 0 18px;
+  padding: 16px 0 10px;
 }
 .brand {
   font-size: 26px; font-weight: 750; letter-spacing: -.5px;
@@ -119,7 +122,7 @@ button { cursor: pointer; }
 
 /* ---- tabs ------------------------------------------------------------ */
 
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 8px 0 20px; flex-wrap: wrap; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 4px 0 16px; flex-wrap: wrap; }
 .tabs button {
   background: none; border: none; border-bottom: 2px solid transparent;
   color: var(--text-dim); padding: 9px 14px; font-size: 13.5px; font-weight: 550;
@@ -274,12 +277,12 @@ tbody tr.click:hover { background: var(--bg-card-hover); }
 .note.warn { border-left-color: var(--warn); }
 
 footer {
-  margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border);
+  margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);
   color: var(--text-faint); font-size: 12.5px; display: flex; gap: 14px; flex-wrap: wrap;
 }
 
 @media (max-width: 640px) {
-  .app { padding: 0 12px 48px; }
+  .app { padding: 0 12px 16px; }
   .brand { font-size: 22px; }
   .tile .v { font-size: 18px; }
 }
@@ -318,6 +321,9 @@ footer {
 /* ---- allocator structure graph ----------------------------------------- */
 
 .structure-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.st-body { display: flex; flex-direction: column; gap: 14px; }
+.st-main { height: clamp(420px, 75vh, 900px); overflow: auto; scrollbar-gutter: stable; }
+.st-side > .card { background: none; border: none; padding: 0; margin: 0; }
 .chart.structure { min-width: 880px; user-select: none; }
 .structure .colhdr {
   fill: var(--text-faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; font-weight: 650;
@@ -365,3 +371,78 @@ code.meta {
   border-radius: 4px; padding: 0 6px;
 }
 .metas { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+
+/* ---- allocation timeline ------------------------------------------------ */
+
+.atl-bar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.toggle { display: inline-flex; align-items: center; gap: 0; font-size: 12px; }
+.toggle .lbl {
+  text-transform: uppercase; letter-spacing: .08em; font-size: 10.5px; color: var(--text-faint); margin-right: 8px;
+}
+.toggle button {
+  border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text-dim);
+  padding: 4px 10px; font-size: 12px; margin-left: -1px;
+}
+.toggle button:first-of-type { border-radius: 6px 0 0 6px; margin-left: 0; }
+.toggle button:last-of-type { border-radius: 0 6px 6px 0; }
+.toggle button:hover { color: var(--text); }
+.toggle button.on { color: var(--text); background: var(--bg-card-hover); border-color: var(--nv-green); position: relative; z-index: 1; }
+
+.atl {
+  position: relative; width: 100%; user-select: none; touch-action: pan-y;
+  height: clamp(300px, 60vh, 640px);
+}
+.oomlist { margin-top: 18px; }
+.oomlist h4 {
+  margin: 0 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--text-faint); font-weight: 650;
+}
+.oomlist p { margin: 0 0 8px; }
+.oomlist .detail { margin-top: 0; }
+.oomlist .detail + .detail { margin-top: 8px; }
+
+/* ---- fit-to-window views ----------------------------------------------- */
+
+/* Structure and Allocations are one graph or one table, so on a screen with
+   room they fill the window exactly: the page never scrolls, the graph takes
+   whatever height is left, and long content scrolls inside its own panel.
+   Small screens fall back to an ordinary scrolling page. The timeline sizes
+   its chart to the window in JS instead (AllocTimeline), since what is pinned
+   under it should scroll the page. */
+@media (min-width: 900px) and (min-height: 560px) {
+  .app.fit { height: 100vh; height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }
+  .app.fit > * { flex: none; }
+  .app.fit > .view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .app.fit .card.fill { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+  .app.fit .card.fill > * { flex: none; }
+  .app.fit .card.fill > .scroll { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+  .app.fit .scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-card); }
+  .app.fit footer { margin-top: 0; padding: 6px 0 8px; border-top: none; }
+
+  .app.fit .card.fill > .st-body { flex: 1 1 auto; min-height: 0; flex-direction: row; gap: 16px; }
+  .app.fit .st-main { flex: 1 1 auto; min-width: 0; height: auto; }
+  .app.fit .st-side {
+    flex: 0 0 clamp(340px, 30vw, 560px); min-height: 0; overflow: auto;
+    border-left: 1px solid var(--border); padding-left: 16px;
+  }
+  .app.fit .st-side .stack { max-height: none; }
+}
+.atl-tip {
+  position: absolute; z-index: 2; pointer-events: none; max-width: min(560px, 70%);
+  background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; color: var(--text-dim); line-height: 1.5;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
+  max-height: calc(100% - 20px); overflow: hidden;
+}
+.atl-tip .hd b { color: var(--text); }
+.atl-tip .line { color: var(--text); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atl-tip.full { max-width: min(760px, 85%); }
+.atl-tip .stack { margin-top: 4px; max-height: none; font-size: 11.5px; line-height: 1.55; }
+.atl canvas { position: absolute; display: block; image-rendering: pixelated; }
+.atl svg { position: absolute; inset: 0; }
+.atl svg.over { cursor: crosshair; }
+.chart .ovl { fill: none; stroke-width: 1.5; }
+.chart .res-line { stroke: var(--line-reserved); }
+.chart .alc-line { stroke: var(--line-allocated); }
+.chart .brush { fill: rgba(118, 185, 0, .12); stroke: var(--nv-green-dim); stroke-width: 1; }
+.chart .life { fill: var(--text); }

@@ -44,7 +44,7 @@ export default function Allocations({ device }) {
   }
 
   return (
-    <div className="card">
+    <div className="card fill">
       <h3>Live allocations by source</h3>
       <p className="sub">
         Every block still alive at snapshot time, grouped by the innermost frame in your own code.
@@ -67,6 +67,7 @@ export default function Allocations({ device }) {
         </span>
       </div>
 
+      <div className="scroll">
       <table>
         <thead>
           <tr>
@@ -115,6 +116,7 @@ export default function Allocations({ device }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

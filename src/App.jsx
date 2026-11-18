@@ -17,6 +17,10 @@ export default function App() {
   const device = useDevice()
   const view = useView()
   const input = useRef(null)
+  // Views that are one graph or one table fit the window and scroll inside
+  // themselves; the rest scroll the page. (The timeline sizes its chart to the
+  // window itself and keeps the page scroll for what is pinned under it.)
+  const fit = !!model && !!device && (tab === 'structure' || tab === 'allocations')
 
   // Dropping a file anywhere on the page is the whole interaction, so catch it
   // on the window rather than only on the drop zone -- once a snapshot is open
@@ -48,7 +52,7 @@ export default function App() {
   }, [load])
 
   return (
-    <div className="app">
+    <div className={`app${fit ? ' fit' : ''}`}>
       <header className="top">
         <div className="brand">
           <Mark />
@@ -97,11 +101,13 @@ export default function App() {
 
           {device.pools.length > 0 && <PoolPicker device={device} />}
 
-          {tab === 'overview' && <Overview device={view} model={model} />}
-          {tab === 'segments' && <Segments device={view} />}
-          {tab === 'structure' && <Structure device={view} />}
-          {tab === 'allocations' && <Allocations device={view} />}
-          {tab === 'timeline' && <Timeline device={view} />}
+          <main className="view">
+            {tab === 'overview' && <Overview device={view} model={model} />}
+            {tab === 'segments' && <Segments device={view} />}
+            {tab === 'structure' && <Structure device={view} />}
+            {tab === 'allocations' && <Allocations device={view} />}
+            {tab === 'timeline' && <Timeline device={view} />}
+          </main>
         </>
       )}
 

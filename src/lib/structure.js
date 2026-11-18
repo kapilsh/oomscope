@@ -179,7 +179,7 @@ const MIN_H = 2
  * under their pool), and the last column is ordered by where its bytes come
  * from, which is what keeps the ribbons from crossing into a hairball.
  */
-export function layoutStructure(graph, { xs, nodeW }) {
+export function layoutStructure(graph, { xs, nodeW, height: want = 480 }) {
   const { nodes, links } = graph
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const cols = COLUMNS.map((_, c) => nodes.filter((n) => n.col === c))
@@ -201,7 +201,9 @@ export function layoutStructure(graph, { xs, nodeW }) {
     (a.seg?.address ?? 0) - (b.seg?.address ?? 0))
 
   const nMax = Math.max(...cols.map((c) => c.length), 1)
-  const height = Math.max(480, nMax * 6)
+  // As tall as the view has room for, but never so short that a column's
+  // nodes drop under a few pixels each -- then the panel scrolls instead.
+  const height = Math.max(280, want, nMax * 6)
   const gapMin = (n) => (n > 40 ? 1 : n > 16 ? 2 : 6)
   const total = nodes[0]?.value || 1
   // One scale for every column, so a ribbon is the same width at both ends.
