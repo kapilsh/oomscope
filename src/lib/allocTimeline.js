@@ -22,6 +22,8 @@
 // enough to cover a pixel centre. The cost tracks the pixels on screen, not
 // how many allocations are alive under them, so nothing is summarised away.
 
+import { provenance } from './frames.js'
+
 // Tableau 10, the categorical palette memory_viz uses, so the two read alike.
 const PALETTE = [
   '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
@@ -177,6 +179,18 @@ export function buildAllocModel(events, segments, mode = 'blocks') {
   return m
 }
 
+// Built once per trace (a pool's filtered trace is its own array), so leaving
+// the tab and coming back does not replay it again.
+const cache = new WeakMap()
+export function modelsFor(events, segments) {
+  let hit = cache.get(events)
+  if (!hit) {
+    hit = { blocks: buildAllocModel(events, segments, 'blocks'), segments: buildAllocModel(events, segments, 'segments') }
+    cache.set(events, hit)
+  }
+  return hit
+}
+
 function findSegment(segments, address) {
   let lo = 0, hi = segments.length - 1
   while (lo <= hi) {
@@ -238,6 +252,7 @@ export function describe(m, slot) {
     metadata: (typeof src.user_metadata === 'string' && src.user_metadata) || src.block?.metadata || src.segment?.metadata || '',
     from,
     segment: src.segment ?? null,
+    prov: provenance(src.block ?? (src.action ? src : src.segment)),
   }
 }
 

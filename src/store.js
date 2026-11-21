@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { unpickle } from './lib/unpickle.js'
 import { parseSnapshot } from './lib/snapshot.js'
 
-export const TABS = ['overview', 'segments', 'structure', 'allocations', 'timeline']
+export const TABS = ['overview', 'timeline', 'history', 'segments', 'allocations', 'structure']
 
 export const useStore = create((set, get) => ({
   model: null,
@@ -17,15 +17,19 @@ export const useStore = create((set, get) => ({
   pool: null, // pool key within the device, or null for all of it
   selectedBlock: null, // {segment, block} from the segment map
   expandedBlame: null, // frame key whose stack is open
+  historyAt: null, // event the history view is at, or null for the snapshot
 
   setTab: (tab) => set({ tab }),
-  setDevice: (device) => set({ device, pool: null, selectedBlock: null, expandedBlame: null }),
-  setPool: (pool) => set({ pool, selectedBlock: null, expandedBlame: null }),
+  setDevice: (device) => set({ device, pool: null, selectedBlock: null, expandedBlame: null, historyAt: null }),
+  setPool: (pool) => set({ pool, selectedBlock: null, expandedBlame: null, historyAt: null }),
+  setHistoryAt: (historyAt) => set({ historyAt }),
+  /** Open the allocator's state as it stood after event i. */
+  showHistory: (i) => set({ tab: 'history', historyAt: i }),
   selectBlock: (sel) => set({ selectedBlock: sel }),
   toggleBlame: (key) => set({ expandedBlame: get().expandedBlame === key ? null : key }),
   clear: () => set({
     model: null, fileName: null, fileBytes: 0, parseMs: 0,
-    error: null, selectedBlock: null, expandedBlame: null, tab: 'overview', device: 0, pool: null,
+    error: null, selectedBlock: null, expandedBlame: null, tab: 'overview', device: 0, pool: null, historyAt: null,
   }),
 
   /** @param {File|{name:string, buffer:ArrayBuffer}} file */
@@ -48,6 +52,7 @@ export const useStore = create((set, get) => ({
         tab: 'overview',
         selectedBlock: null,
         expandedBlame: null,
+        historyAt: null,
       })
     } catch (err) {
       set({ loading: false, error: err.message ?? String(err), model: null })

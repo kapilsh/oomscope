@@ -290,6 +290,26 @@ def cudagraph_trees():
     return locals()
 
 
+@scenario("17-torch-compile.pickle",
+          "torch.compile training, recorded with compile_context=True: each allocation "
+          "names the compiled region that made it, and its stack runs through generated code.")
+def torch_compile():
+    import torch
+    torch.cuda.memory._record_memory_history(max_entries=80_000, compile_context=True)
+    model, d = _model()
+    opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+    compiled = torch.compile(model)
+    for _ in range(3):
+        x = torch.randn(8, 256, d, device="cuda")
+        loss = compiled(x).square().mean()
+        loss.backward()
+        opt.step()
+        opt.zero_grad(set_to_none=True)
+    held = compiled(torch.randn(8, 256, d, device="cuda"))  # activations alive at the dump
+    torch.cuda.synchronize()
+    return locals()
+
+
 @scenario("14-mempool.pickle",
           "torch.cuda.MemPool: a KV cache fenced off, and a scratch pool that kept its memory.")
 def mempool():

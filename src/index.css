@@ -446,3 +446,66 @@ code.meta {
 .chart .alc-line { stroke: var(--line-allocated); }
 .chart .brush { fill: rgba(118, 185, 0, .12); stroke: var(--nv-green-dim); stroke-width: 1; }
 .chart .life { fill: var(--text); }
+
+/* ---- provenance: compile region, FX node, forward stack ------------------ */
+
+code.ctx {
+  font-size: 11px; line-height: 1.5; color: var(--pool-graph); background: rgba(167, 139, 250, .08);
+  border: 1px solid rgba(167, 139, 250, .3); border-radius: 4px; padding: 0 6px; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle;
+}
+.atl-tip .hd code.ctx { margin-left: 6px; }
+.atl-tip .line.fx, .stack .fx { color: var(--pool-graph); }
+.stack .fx.orig { color: var(--text-dim); }
+details.fwd { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); }
+details.fwd > summary { cursor: pointer; user-select: none; }
+details.fwd > summary:hover { color: var(--text); }
+details.fwd > .stack { margin-top: 6px; white-space: pre; }
+
+/* ---- allocator state history ------------------------------------------- */
+
+.hist-strip { position: relative; margin-bottom: 10px; cursor: ew-resize; touch-action: none;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg-elevated); overflow: hidden; }
+.hist-strip canvas { display: block; }
+.hist-strip i { position: absolute; top: 0; bottom: 0; width: 0; pointer-events: none; }
+.hist-strip i.cur { border-left: 2px solid var(--text); margin-left: -1px; }
+.hist-strip i.oom { border-left: 1px dashed var(--line-oom); }
+.hist-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.hist-bar .btn:disabled { opacity: .4; cursor: default; }
+.hist-body { display: flex; flex-direction: column; gap: 14px; }
+.hev {
+  height: 280px; overflow: auto; position: relative; font-size: 11.5px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elevated);
+}
+.hev .ev {
+  position: absolute; left: 0; right: 0; height: 20px; display: flex; gap: 10px; align-items: center;
+  padding: 0 8px; background: none; border: none; color: var(--text-dim); text-align: left;
+  white-space: nowrap; cursor: pointer; font: inherit;
+}
+.hev .ev:hover { background: var(--bg-card-hover); }
+.hev .ev.on { background: rgba(118, 185, 0, .16); color: var(--text); box-shadow: inset 3px 0 0 var(--nv-green); }
+.hev .ev .i { color: var(--text-faint); min-width: 6ch; text-align: right; }
+.hev .ev .a { min-width: 8ch; }
+.hev .ev .s { min-width: 9ch; text-align: right; }
+.hev .ev .ad { color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; }
+.hev .a-alloc .a { color: var(--nv-green); }
+.hev .a-free .a { color: var(--text-faint); }
+.hev .a-seg .a { color: var(--line-reserved); }
+.hev .a-oom .a { color: var(--error); font-weight: 650; }
+.hist-main { min-width: 0; }
+.hev-card { margin-top: 0; }
+.hev-card.oom { border-color: rgba(248, 113, 113, .45); }
+.hev-card .stack { max-height: 240px; }
+.hist-stats { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-dim); margin: 10px 0; }
+.hist-stats b { color: var(--text); font-weight: 600; }
+.seg.ev .hdr .addr { color: var(--warn); }
+.blocks button.ev { outline: 2px dashed var(--warn); outline-offset: -2px; z-index: 1; }
+
+@media (min-width: 900px) and (min-height: 560px) {
+  .app.fit .card.fill > .hist-body { flex: 1 1 auto; min-height: 0; flex-direction: row; gap: 16px; }
+  .app.fit .hev { flex: 0 0 clamp(300px, 24vw, 420px); height: auto; }
+  .app.fit .hist-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .app.fit .hist-main > * { flex: none; }
+  .app.fit .hev-card { max-height: 42%; overflow: auto; }
+  .app.fit .hist-map { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable; padding-right: 4px; }
+}

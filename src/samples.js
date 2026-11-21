@@ -46,6 +46,13 @@ const SAMPLES = [
     look: 'timeline',
   },
   {
+    file: '17-torch-compile.pickle',
+    title: 'torch.compile',
+    blurb: 'A training loop under torch.compile, recorded with compile_context=True. Hover a band on the timeline: allocations made inside the compiled graph name their region, and the stack runs from inductor\'s generated code back to the line that called the model.',
+    group: 'typical',
+    look: 'timeline',
+  },
+  {
     file: '01-inference-clean.pickle',
     title: 'Clean inference',
     blurb: 'Forward passes under no_grad, nothing retained. What healthy looks like, for contrast — though even here a third of the reserved memory is idle.',

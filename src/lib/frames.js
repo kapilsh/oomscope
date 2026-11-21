@@ -20,6 +20,10 @@ const TORCH_PKG = /[/\\]torch[/\\]/
 // CPython's own C sources show up with real filenames, so extension alone does
 // not separate "interpreter" from "library".
 const CPYTHON_SRC = /[/\\](Python|Objects|Modules|Include)[/\\][^/\\]+\.(c|h)$/
+// Code torch.compile generated (inductor's cache, /tmp/torchinductor_<user>/).
+// It is Python outside site-packages, but nobody wrote it: blame goes past it
+// to the line that called the compiled model.
+const GENERATED = /[/\\]torchinductor_[^/\\]*[/\\]/
 
 export const FrameKind = {
   USER: 'user', // your code
@@ -31,12 +35,20 @@ export const FrameKind = {
 export function frameKind(f) {
   const file = f?.filename ?? ''
   if (!PY.test(file)) { return FrameKind.RUNTIME }
-  if (SITE_PACKAGES.test(file) || TORCH_PKG.test(file)) { return FrameKind.LIBRARY }
+  if (SITE_PACKAGES.test(file) || TORCH_PKG.test(file) || GENERATED.test(file)) { return FrameKind.LIBRARY }
   if (CPYTHON_SRC.test(file)) { return FrameKind.RUNTIME }
   return FrameKind.USER
 }
 
 export function isPython(f) { return frameKind(f) !== FrameKind.RUNTIME }
+
+// A C++-only stack is what an allocation made in backward has: it runs on
+// autograd's own thread, with no Python under it. Its readable frames are the
+// autograd node being applied and the aten op it called; the unwinder's own
+// frames come first and say nothing.
+const BACKWARD_NODE = /autograd::generated::(\w+)::apply\b/
+const ATEN_OP = /\bat::_ops::(\w+)::(?:call|redispatch)\b/
+const UNWINDER = /unwind::unwind|CapturedTraceback::gather|gather_with_cpp/
 
 /**
  * The frame to put on the row.
@@ -53,9 +65,13 @@ export function blameFrame(frames) {
   return (
     frames.find((f) => frameKind(f) === FrameKind.USER) ??
     frames.find((f) => frameKind(f) === FrameKind.LIBRARY) ??
-    // No Python at all: an allocation from inside the runtime. Prefer a frame
-    // that at least names a source file over the unwinder's own entry point.
-    frames.find(named) ??
+    // No Python at all: an allocation from inside the runtime. The autograd
+    // node says which backward it was, else the aten op; failing both, a
+    // frame that at least names a source file and is not the unwinder.
+    frames.find((f) => BACKWARD_NODE.test(f.name ?? '')) ??
+    frames.find((f) => ATEN_OP.test(f.name ?? '')) ??
+    frames.find((f) => named(f) && !UNWINDER.test(f.name ?? '')) ??
+    frames.find((f) => !UNWINDER.test(f.name ?? '')) ??
     frames[0]
   )
 }
@@ -69,6 +85,12 @@ export function frameKey(f) {
 /** `train.py:17 <module>` -- the long absolute path is noise in a table. */
 export function frameLabel(f) {
   if (!f) { return '<no stack>' }
+  if (frameKind(f) === FrameKind.RUNTIME) {
+    const bw = BACKWARD_NODE.exec(f.name ?? '')
+    if (bw) { return `${bw[1]}  (autograd backward)` }
+    const op = ATEN_OP.exec(f.name ?? '')
+    if (op) { return `aten::${op[1]}` }
+  }
   const file = f.filename ?? '??'
   const base = file.split(/[/\\]/).pop() || file
   const where = f.line ? `${base}:${f.line}` : base
@@ -87,4 +109,37 @@ export function pythonStack(frames) {
 export function displayStack(frames) {
   const py = pythonStack(frames)
   return py.length > 0 ? py : (frames ?? [])
+}
+
+/**
+ * What a trace event, block or segment says about where it came from beyond
+ * its stack: the torch.compile region it was made in (recorded with
+ * `_record_memory_history(compile_context=True)`; "N/A" outside one), a tag
+ * the allocator put on its own bookkeeping, and -- for an allocation made in
+ * backward -- the forward-pass stack where its tensor was created.
+ */
+export function provenance(x) {
+  const ev = x?.allocEvent ?? x
+  const cc = ev?.compile_context
+  const ff = x?.forwardFrames?.length ? x.forwardFrames : ev?.forward_frames
+  return {
+    compileContext: typeof cc === 'string' && cc !== 'N/A' ? cc : '',
+    internal: typeof ev?.internal_metadata === 'string' ? ev.internal_metadata : '',
+    forward: Array.isArray(ff) ? ff.map(String) : [],
+  }
+}
+
+/** The innermost frame torch.compile mapped to an FX node, if the snapshot has any. */
+export function fxFrame(frames) {
+  return (frames ?? []).find((f) => f.fx_node_name || f.fx_node_op || f.fx_node_target) ?? null
+}
+
+/** `node mm_1 · call_function · aten.mm.default`, or ''. */
+export function fxLabel(f) {
+  if (!f) { return '' }
+  const parts = []
+  if (f.fx_node_name) { parts.push(`node ${f.fx_node_name}`) }
+  if (f.fx_node_op) { parts.push(f.fx_node_op) }
+  if (f.fx_node_target) { parts.push(f.fx_node_target) }
+  return parts.join(' · ')
 }

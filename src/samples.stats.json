@@ -208,5 +208,19 @@
     "oomEvents": 0,
     "truncated": false,
     "hasTrace": true
+  },
+  "17-torch-compile.pickle": {
+    "fileBytes": 1197863,
+    "devices": 1,
+    "reserved": 434110464,
+    "active": 324594176,
+    "segments": 17,
+    "pools": 1,
+    "utilisation": 0.7477225335899759,
+    "fragmentation": 0.31062791317397465,
+    "traceEvents": 4373,
+    "oomEvents": 0,
+    "truncated": false,
+    "hasTrace": true
   }
 }

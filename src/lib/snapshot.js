@@ -10,6 +10,9 @@
 //                   frames[]
 //   device_traces[] per device, a list of
 //                   {action, addr, size, stream, time_us, compile_context, frames[]}
+//                   optionally internal_metadata (an allocator-internal tag) and
+//                   forward_frames (the forward-pass stack a backward-pass
+//                   allocation's tensor was created at; blocks carry it too)
 //                   action in alloc | free_requested | free_completed |
 //                   segment_alloc | segment_free | oom | snapshot | annotate
 //                   newer torch adds pool_id (the event's pool) and
@@ -62,7 +65,7 @@ export function parseSnapshot(raw) {
     )
   }
 
-  const traces = Array.isArray(raw.device_traces) ? raw.device_traces : []
+  const traces = (Array.isArray(raw.device_traces) ? raw.device_traces : []).map(normaliseTrace)
   const deviceIds = new Set()
   for (const seg of raw.segments) { deviceIds.add(seg.device ?? 0) }
   traces.forEach((t, i) => { if (t && t.length) { deviceIds.add(i) } })
@@ -128,7 +131,7 @@ function attachMetadata(trace, segments) {
     const meta = typeof e.user_metadata === 'string' ? e.user_metadata : ''
     if (meta) { any = true }
     switch (e.action) {
-      case 'alloc': live.set(e.addr, { metadata: meta, annotations: [] }); break
+      case 'alloc': live.set(e.addr, { metadata: meta, annotations: [], event: e }); break
       case 'free_completed': live.delete(e.addr); break
       case 'annotate': {
         const b = live.get(e.addr)
@@ -136,18 +139,23 @@ function attachMetadata(trace, segments) {
         break
       }
       case 'segment_alloc':
-      case 'segment_map': segMeta.set(e.addr, meta); break
+      case 'segment_map': segMeta.set(e.addr, { meta, event: e }); break
       case 'segment_free':
       case 'segment_unmap': segMeta.delete(e.addr); break
       default: break
     }
   }
   for (const seg of segments) {
-    seg.metadata = segMeta.get(seg.address) ?? ''
+    const sm = segMeta.get(seg.address)
+    seg.metadata = sm?.meta ?? ''
+    // The trace event that made it: where compile context and the allocator's
+    // own tags live, which the snapshot's block list does not repeat.
+    seg.allocEvent = sm?.event ?? null
     for (const b of seg.blocks) {
       const m = b.active ? live.get(b.address) : null
       b.metadata = m?.metadata ?? ''
       b.annotations = m?.annotations ?? []
+      b.allocEvent = m?.event ?? null
     }
   }
   return any
@@ -169,6 +177,22 @@ export function metadataName(meta) {
   }
 }
 
+/**
+ * `_set_memory_metadata` accepts a dict, and torch has stored it both as the
+ * dict and as its JSON; every view treats metadata as the string the user
+ * wrote, so make it one here, once.
+ */
+function normaliseTrace(trace) {
+  if (!Array.isArray(trace)) { return [] }
+  for (const e of trace) {
+    const m = e.user_metadata
+    if (m != null && typeof m !== 'string') {
+      e.user_metadata = typeof m === 'object' ? (Object.keys(m).length ? JSON.stringify(m) : '') : String(m)
+    }
+  }
+  return trace
+}
+
 function normaliseSegment(seg) {
   const total = seg.total_size ?? 0
   const base = seg.address ?? 0
@@ -187,6 +211,7 @@ function normaliseSegment(seg) {
       state: b.state ?? BlockState.INACTIVE,
       active: b.state === BlockState.ALLOCATED || b.state === BlockState.PENDING_FREE,
       frames: b.frames ?? [],
+      forwardFrames: b.forward_frames ?? [],
     }
     offset += size
     return block
@@ -208,6 +233,7 @@ function normaliseSegment(seg) {
     poolKey: poolKey(seg.segment_pool_id),
     isExpandable: !!seg.is_expandable,
     frames: seg.frames ?? [],
+    forwardFrames: seg.forward_frames ?? [],
     blocks,
     // A segment whose blocks do not add up to its size has a hole the block
     // list does not describe; surface it rather than silently mis-drawing.
@@ -312,6 +338,7 @@ function buildTimeline(trace, baseReserved = 0) {
           deviceFree: e.device_free ?? null,
           timeUs: e.time_us ?? null,
           frames: e.frames ?? [],
+          event: e,
         })
         break
       default: break

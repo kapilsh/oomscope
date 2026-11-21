@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 
 import { bytes, addr, pct, count } from '../lib/format.js'
-import { blameFrame, frameLabel, displayStack } from '../lib/frames.js'
+import { blameFrame, frameLabel, displayStack, provenance } from '../lib/frames.js'
 import { BlockState } from '../lib/snapshot.js'
 import { useStore } from '../store.js'
 import Stack from './Stack.jsx'
 import Meta from './Meta.jsx'
+import { ForwardStack, ProvenanceRows } from './Provenance.jsx'
 
 const SORTS = {
   address: (a, b) => a.address - b.address,
@@ -116,8 +117,15 @@ export default function Segments({ device }) {
   )
 }
 
-function Segment({ seg, pool, selected, onSelect }) {
+/**
+ * One segment row. `mark` is an address the history view wants pointed at --
+ * the block an event touched, or the segment it mapped -- and `extra` renders
+ * more rows into the open block's detail.
+ */
+export function Segment({ seg, pool, selected, onSelect, mark = null, extra }) {
   const free = seg.totalSize - seg.activeSize
+  const hits = (b) => mark != null && mark >= b.address && mark < b.address + b.size
+  const segMarked = mark != null && mark >= seg.address && mark < seg.address + seg.totalSize
   const fragments = seg.blocks.filter((b) => !b.active).length
   const isSel = (b) => selected && selected.segAddress === seg.address && selected.index === b.index
   const openBlock = selected && selected.segAddress === seg.address
@@ -125,7 +133,7 @@ function Segment({ seg, pool, selected, onSelect }) {
     : null
 
   return (
-    <div className="seg">
+    <div className={`seg${segMarked ? ' ev' : ''}`}>
       <div className="hdr">
         <span className="mono addr">{addr(seg.address)}</span>
         <b style={{ color: 'var(--text)' }}>{bytes(seg.totalSize)}</b>
@@ -151,6 +159,7 @@ function Segment({ seg, pool, selected, onSelect }) {
             className={[
               b.state === BlockState.ALLOCATED ? 'active' : b.state === BlockState.PENDING_FREE ? 'pending' : 'free',
               isSel(b) ? 'on' : '',
+              hits(b) ? 'ev' : '',
             ].join(' ')}
             style={{ flexGrow: Math.max(b.size, 1), flexBasis: 0 }}
             title={`${bytes(b.size)} ${b.state}${b.active && b.requestedSize !== b.size ? ` (asked ${bytes(b.requestedSize)})` : ''}\n${addr(b.address)}`}
@@ -165,13 +174,14 @@ function Segment({ seg, pool, selected, onSelect }) {
           />
         )}
       </div>
-      {openBlock && <BlockDetail seg={seg} block={openBlock} />}
+      {openBlock && <BlockDetail seg={seg} block={openBlock}>{extra?.(openBlock)}</BlockDetail>}
     </div>
   )
 }
 
-export function BlockDetail({ seg, block }) {
+export function BlockDetail({ seg, block, children }) {
   const frame = blameFrame(block.frames)
+  const prov = provenance(block)
   const waste = block.size - block.requestedSize
   return (
     <div className="detail">
@@ -204,7 +214,10 @@ export function BlockDetail({ seg, block }) {
           ))}
         </div>
       )}
+      <ProvenanceRows p={prov} frames={block.frames} />
+      {children}
       <Stack frames={displayStack(block.frames)} limit={30} />
+      <ForwardStack frames={prov.forward} />
     </div>
   )
 }

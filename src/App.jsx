@@ -7,6 +7,7 @@ import Segments from './components/Segments.jsx'
 import Allocations from './components/Allocations.jsx'
 import Timeline from './components/Timeline.jsx'
 import Structure from './components/Structure.jsx'
+import History from './components/History.jsx'
 import SamplePicker from './components/SamplePicker.jsx'
 
 export default function App() {
@@ -20,7 +21,7 @@ export default function App() {
   // Views that are one graph or one table fit the window and scroll inside
   // themselves; the rest scroll the page. (The timeline sizes its chart to the
   // window itself and keeps the page scroll for what is pinned under it.)
-  const fit = !!model && !!device && (tab === 'structure' || tab === 'allocations')
+  const fit = !!model && !!device && (tab === 'structure' || tab === 'allocations' || tab === 'history')
 
   // Dropping a file anywhere on the page is the whole interaction, so catch it
   // on the window rather than only on the drop zone -- once a snapshot is open
@@ -107,6 +108,7 @@ export default function App() {
             {tab === 'structure' && <Structure device={view} />}
             {tab === 'allocations' && <Allocations device={view} />}
             {tab === 'timeline' && <Timeline device={view} />}
+            {tab === 'history' && <History device={view} />}
           </main>
         </>
       )}

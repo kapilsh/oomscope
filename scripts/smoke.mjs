@@ -31,6 +31,7 @@ import Overview from '${SRC}/components/Overview.jsx'
 import Segments from '${SRC}/components/Segments.jsx'
 import Allocations from '${SRC}/components/Allocations.jsx'
 import Timeline from '${SRC}/components/Timeline.jsx'
+import History from '${SRC}/components/History.jsx'
 import Structure from '${SRC}/components/Structure.jsx'
 import SamplePicker from '${SRC}/components/SamplePicker.jsx'
 import App from '${SRC}/App.jsx'
@@ -54,6 +55,7 @@ function views(device, model) {
     ['structure', Structure, { device }],
     ['allocations', Allocations, { device }],
     ['timeline', Timeline, { device }],
+    ['history', History, { device }],
   ]) {
     out[name] = renderToStaticMarkup(h(C, props)).length
   }
@@ -141,6 +143,7 @@ try {
       structure: hasSegments ? 500 : 1,
       allocations: d && d.blame.length > 0 ? 500 : 1,
       timeline: d && d.timeline.hasTrace ? 500 : 1,
+      history: d && d.timeline.hasTrace ? 500 : 1,
     }
     const marks = Object.entries(out).map(([name, len]) => {
       const ok = len >= floors[name]
@@ -154,7 +157,7 @@ try {
     )
     for (const { pool, out: pout } of pools) {
       // The floor drops for a pool whose surviving segments saw no events.
-      const pfloors = { ...floors, timeline: pool.timeline.hasTrace ? 500 : 1, allocations: pool.blame.length ? 500 : 1 }
+      const pfloors = { ...floors, timeline: pool.timeline.hasTrace ? 500 : 1, history: pool.timeline.hasTrace ? 500 : 1, allocations: pool.blame.length ? 500 : 1 }
       const pmarks = Object.entries(pout).map(([name, len]) => {
         const ok = len >= pfloors[name]
         if (!ok) { failures++ }

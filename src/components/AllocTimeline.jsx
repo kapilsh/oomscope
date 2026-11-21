@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { addr, bytes, bytesTick, count, duration } from '../lib/format.js'
-import { blameFrame, displayStack, frameKey, frameLabel } from '../lib/frames.js'
-import { buildAllocModel, describe, rangeMax, rasterize, slotColors } from '../lib/allocTimeline.js'
+import { blameFrame, displayStack, frameKey, frameLabel, fxFrame, fxLabel, provenance } from '../lib/frames.js'
+import { describe, modelsFor, rangeMax, rasterize, slotColors } from '../lib/allocTimeline.js'
+import { useStore } from '../store.js'
 import Stack from './Stack.jsx'
 import Meta from './Meta.jsx'
+import { ForwardStack, ProvenanceRows } from './Provenance.jsx'
 
 const PAD = { l: 62, r: 14, t: 12, b: 26 }
 // Same breakpoint as the fit-to-window CSS: below it the page just scrolls.
@@ -13,17 +15,6 @@ const FIT_QUERY = '(min-width: 900px) and (min-height: 560px)'
 const BELOW_CHART = 10 + 16 + 14
 const MIN_SPAN = 16 // events; narrower than this and a column is mostly one event
 
-// Built once per trace (a pool's filtered trace is its own array), so leaving
-// the tab and coming back does not replay it again.
-const cache = new WeakMap()
-function modelsFor(events, segments) {
-  let hit = cache.get(events)
-  if (!hit) {
-    hit = { blocks: buildAllocModel(events, segments, 'blocks'), segments: buildAllocModel(events, segments, 'segments') }
-    cache.set(events, hit)
-  }
-  return hit
-}
 
 const sourceKey = (frames) => frameKey(blameFrame(frames))
 
@@ -50,6 +41,7 @@ export default function AllocTimeline({ device, children }) {
   const [hover, setHover] = useState(null) // { c, slot, px, py }
   const [pinned, setPinned] = useState(null) // slot
   const [brush, setBrush] = useState(null) // { from, to } css px
+  const showHistory = useStore((s) => s.showHistory)
 
   const wrapRef = useRef(null)
   const legendRef = useRef(null)
@@ -404,12 +396,13 @@ export default function AllocTimeline({ device, children }) {
             n={n}
             streamNames={streamNames}
             onZoom={() => zoomTo(Math.max(0, pin.start), Math.min(n, pin.end + 1))}
+            onHistory={showHistory}
             onClose={() => setPinned(null)}
           />
         </div>
       )}
       {tl.oomEvents.length > 0 && (
-        <OomList events={tl.oomEvents} onShow={(i) => zoomTo(i, i + 1, Math.max(MIN_SPAN, n * 0.02))} />
+        <OomList events={tl.oomEvents} onShow={(i) => zoomTo(i, i + 1, Math.max(MIN_SPAN, n * 0.02))} onHistory={showHistory} />
       )}
       {children}
     </div>
@@ -421,7 +414,7 @@ export default function AllocTimeline({ device, children }) {
  * request the allocator could not satisfy -- not necessarily the code that
  * wasted the memory.
  */
-function OomList({ events, onShow }) {
+function OomList({ events, onShow, onHistory }) {
   return (
     <div className="oomlist">
       <h4>Out-of-memory events</h4>
@@ -430,6 +423,7 @@ function OomList({ events, onShow }) {
       </p>
       {events.map((o, i) => {
         const frame = blameFrame(o.frames)
+        const prov = provenance(o.event)
         return (
           <div key={i} className="detail">
             <div className="row">
@@ -438,9 +432,12 @@ function OomList({ events, onShow }) {
               <span>·</span><span>event #{count(o.index)}</span>
               <span style={{ flex: 1 }} />
               <button className="linkish" onClick={() => onShow(o.index)}>show on chart</button>
+              <button className="linkish" onClick={() => onHistory(o.index)} title="The segment map as it stood when this request failed: what was free, and in what pieces">allocator state here</button>
             </div>
             {frame && <div className="row"><span>at <b className="mono">{frameLabel(frame)}</b></span></div>}
+            <ProvenanceRows p={prov} frames={o.frames} />
             <Stack frames={displayStack(o.frames)} limit={25} />
+            <ForwardStack frames={prov.forward} />
           </div>
         )
       })}
@@ -455,6 +452,7 @@ function OomList({ events, onShow }) {
  */
 function Tip({ d, what, full, at, width, height }) {
   const frame = blameFrame(d.frames)
+  const fx = fxLabel(fxFrame(d.frames))
   const style = {}
   if (at.px > width * 0.55) { style.right = width - at.px + 14 } else { style.left = at.px + 14 }
   if (at.py > height * 0.5) { style.bottom = height - at.py + 10 } else { style.top = at.py + 10 }
@@ -463,11 +461,18 @@ function Tip({ d, what, full, at, width, height }) {
       <div className="hd">
         <b>{bytes(d.size)}</b> {what}
         <span className="muted"> · {d.start < 0 ? 'before the trace' : `event ${count(d.start)}`} → {d.alive ? 'snapshot' : `event ${count(d.end)}`}</span>
+        {d.prov.compileContext && <code className="ctx">{d.prov.compileContext}</code>}
       </div>
       {d.metadata && <div><Meta text={d.metadata} clip={60} /></div>}
       {full
         ? <Stack frames={displayStack(d.frames)} limit={30} />
-        : <div className="mono line">{frame ? frameLabel(frame) : 'no stack recorded'}</div>}
+        : (
+          <>
+            <div className="mono line">{frame ? frameLabel(frame) : 'no stack recorded'}</div>
+            {fx && <div className="mono line fx">FX {fx}</div>}
+          </>
+        )}
+      {d.prov.forward.length > 0 && <div className="muted">+ forward-pass stack — click to pin</div>}
     </div>
   )
 }
@@ -482,7 +487,7 @@ function Lifetime({ d, xOf, view, n, plotH }) {
   return <rect className="life" x={x0} width={Math.max(1, x1 - x0)} y={PAD.t + plotH} height={3} />
 }
 
-function Detail({ d, what, t0, n, streamNames, onZoom, onClose }) {
+function Detail({ d, what, t0, n, streamNames, onZoom, onHistory, onClose }) {
   const frame = blameFrame(d.frames)
   const at = (i, us) => `event ${count(i)}${us != null && t0 != null ? ` (${duration(us - t0)})` : ''}`
   return (
@@ -494,6 +499,8 @@ function Detail({ d, what, t0, n, streamNames, onZoom, onClose }) {
         {d.metadata && <><span>·</span><Meta text={d.metadata} /></>}
         <span style={{ flex: 1 }} />
         <button className="linkish" onClick={onZoom}>zoom to its lifetime</button>
+        {d.start >= 0 && <button className="linkish" onClick={() => onHistory(d.start)} title="The segment map right after this was allocated">allocator state when made</button>}
+        {d.end < n && <button className="linkish" onClick={() => onHistory(Math.max(0, d.end - 1))} title="The segment map just before this was freed">…before its free</button>}
         <button className="linkish" onClick={onClose}>close</button>
       </div>
       <div className="row">
@@ -506,7 +513,9 @@ function Detail({ d, what, t0, n, streamNames, onZoom, onClose }) {
         </span>
       </div>
       {frame && <div className="row"><span>at <b className="mono">{frameLabel(frame)}</b></span></div>}
+      <ProvenanceRows p={d.prov} frames={d.frames} />
       <Stack frames={displayStack(d.frames)} limit={25} />
+      <ForwardStack frames={d.prov.forward} />
     </div>
   )
 }
